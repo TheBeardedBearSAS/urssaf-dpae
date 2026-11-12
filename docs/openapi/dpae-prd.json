@@ -1,0 +1,543 @@
+{
+  "swagger" : "2.0",
+  "info" : {
+    "description" : "API Declaration Prealable A l'Embauche de l'Urssaf Caisse Nationale - Cette interface permet au logiciel producteur de DPAE de s'authentifier directement sur le point de depot Urssaf des DPAE et de transmettre de tres grand nombre de depot de declarations avec en retour des accuses d'enregistrement electronique, des certificats de conformite et le compte rendu metier : L'accuse de reception de la DPAE. Cette offre DPAE converge vers celle de la DPAE, ce qui facilite la mise en œuvre dans le logiciel de production des DPAE pour les editeurs qui proposent l'API DPAE.",
+    "version" : "1.0.0",
+    "title" : "API DPAE",
+    "contact" : {
+      "name" : "Support API Urssaf",
+      "url" : "https://acoss-dsi.atlassian.net/servicedesk/customer/portal/2"
+    }
+  },
+  "host" : "api.urssaf.fr",
+  "basePath" : "/authentifier_dpae",
+  "tags" : [ {
+    "name" : "authentifier"
+  }, {
+    "name" : "deposer-dpae"
+  }, {
+    "name" : "lister-retours-declarant"
+  }, {
+    "name" : "telecharger-retour"
+  } ],
+  "schemes" : [ "https" ],
+  "consumes" : [ "application/json" ],
+  "produces" : [ "application/json" ],
+  "paths" : {
+    "/authentifier_dpae" : {
+      "post" : {
+        "tags" : [ "authentifier" ],
+        "summary" : "authentifierUsingPost-v1",
+        "description" : "Requete d'authentification",
+        "operationId" : "authentifierUsingPost-v1",
+        "consumes" : [ "application/xml" ],
+        "produces" : [ "application/octet-stream" ],
+        "parameters" : [ {
+          "name" : "Content-Type",
+          "in" : "header",
+          "description" : "",
+          "required" : false,
+          "type" : "string",
+          "enum" : [ "application/xml" ]
+        }, {
+          "in" : "body",
+          "name" : "body",
+          "description" : "",
+          "required" : true,
+          "schema" : {
+            "$ref" : "#/definitions/identifiants"
+          }
+        } ],
+        "deprecated" : false,
+        "responses" : {
+          "200" : {
+            "description" : "Jeton encode en base 64",
+            "headers" : { },
+            "schema" : {
+              "type" : "string",
+              "format" : "binary",
+              "default" : ""
+            }
+          },
+          "401" : {
+            "description" : "Erreur d'authentification \n<!DOCTYPE HTML PUBLIC \"-//IETF//DTD HTML 2.0//EN\"> <html> <head> <title>401 Unauthorized</title> </head> <body> <h1>Unauthorized</h1> <p>This server could not verify that you are authorized to access the document requested. Either you supplied the wrong credentials (e.g., bad password), or your browser doesn't understand how to supply the credentials required.</p> </body> </html>",
+            "headers" : {
+              "WWW-Authenticate" : {
+                "type" : "string",
+                "description" : "<ul><li><u>Erreur d'authentification : mot de passe expire</u> = Basic realm=«Expiration du mot de passe»</li><li><u>Erreur d'authentification (compte inconnu, mot de passe incorrect</u> = Basic realm=«net-entreprises.fr»</li><li><u>Declarant non-inscrit a la DPAE</u> = DPAELogin realm=«Utilisateur non-inscrit au service»</li></ul>"
+              }
+            }
+          },
+          "404" : {
+            "description" : "cf. RFC 2616\n<!DOCTYPE HTML PUBLIC \"-//IETF//DTD HTML 2.0//EN\">\n<html>\n\n<head>\n\t<title>404 Not Found</title>\n</head>\n\n<body>\n\t<h1>Not Found</h1>\n\t<p>The requested URL /authentifier_dpaes was not found on this server.</p>\n</body>\n\n</html>",
+            "headers" : { }
+          },
+          "422" : {
+            "description" : "Parametres invalides (dont contraintes de format Net-E)\n<!DOCTYPE HTML PUBLIC \"-//IETF//DTD HTML 2.0//EN\">\n<html>\n\n<head>\n\t<title>422 Unprocessable Entity</title>\n</head>\n\n<body>\n\t<h1>Unprocessable Entity</h1>\n\t<p>The server understands the media type of the\n\t\trequest entity, but was unable to process the\n\t\tcontained instructions.</p>\n</body>\n\n</html>",
+            "headers" : { }
+          }
+        }
+      }
+    },
+    "/deposer-dsn/1.0" : {
+      "post" : {
+        "tags" : [ "deposer-dpae" ],
+        "summary" : "deposerDsnUsingPost-v1",
+        "description" : "Service de depot d'une DPAE\nUtiliser le server \"depot\"",
+        "operationId" : "deposerDsnUsingPost-v1",
+        "produces" : [ "application/xml" ],
+        "parameters" : [ {
+          "name" : "Authorization",
+          "in" : "header",
+          "description" : "Jeton d'authentification encode en base64<br/> Format <strong>DPAELogin jeton=...</strong>",
+          "required" : true,
+          "type" : "string"
+        }, {
+          "in" : "body",
+          "name" : "body",
+          "description" : "Contenu du flux DPAE tel qu'il est genere par le logiciel de paie au format gzip(.gz).<br/> Les archives ne sont pas acceptees.<br/> Seul le depot unitaire est supporte, c'est-a-dire un seul flux DPAE contenant un seul rang (un seul bloc S20).<br/> En cas de non-respect de cette contrainte, le service renverra quand meme un AEE. C'est le bilan d'anomalie qui contiendra une erreur specifique.",
+          "required" : true,
+          "schema" : { }
+        } ],
+        "deprecated" : false,
+        "responses" : {
+          "200" : {
+            "description" : "Le retour de l'AEE ou de l'avis de rejet est synchrone. Le corps de la reponse contient directement l'AEE ou l'avis de rejet. L'AEE et l'avis de rejet sont telechargeables a nouveau par les services de gestion des retours.<br/> Exemple de reponses :<ul><li><a target=\"_blank\" href=\"\">Exemple succes (AEE)</a></li><li><a target=\"_blank\" href=\"\">Exemple avis de rejet</a></li></ul>",
+            "headers" : { },
+            "schema" : {
+              "$ref" : "#/definitions/envoi"
+            }
+          },
+          "400" : {
+            "description" : "Requete incorrecte ou erreur fonctionnelle lors de la recuperation",
+            "headers" : { }
+          },
+          "401" : {
+            "description" : "Jeton manquant ou invalide",
+            "headers" : {
+              "WWW-Authenticate" : {
+                "type" : "string",
+                "description" : "<ul> <li><u>Erreur d'authentification (inclus les fiches de parametrage)</u> = DPAELogin realm=«Jeton manquant ou invalide»</li> <li><u>Jeton expire (inclus les fiches de parametrage)</u> = DPAELogin realm=«Expiration du jeton»</li> <li><u>Declarant non-inscrit a la DPAE</u> = DPAELogin realm=«Utilisateur non-inscrit au service»</li> </ul>"
+              }
+            }
+          },
+          "404" : {
+            "description" : "cf. RFC 2616\n<!DOCTYPE HTML PUBLIC \"-//IETF//DTD HTML 2.0//EN\">\n<html>\n\n<head>\n\t<title>404 Not Found</title>\n</head>\n\n<body>\n\t<h1>Not Found</h1>\n\t<p>The requested URL /deposer-dsns/1.0 was not found on this server.</p>\n</body>\n\n</html>",
+            "headers" : { }
+          },
+          "406" : {
+            "description" : "Le client demande explicitement un format de reponse (Accept-Encoding) qui n'est pas supporte. Les formats supportes doivent inclure gzip ou ne rien preciser",
+            "headers" : { }
+          },
+          "415" : {
+            "description" : "Type de media non supporte",
+            "headers" : { }
+          },
+          "422" : {
+            "description" : "Avis de rejet",
+            "headers" : { }
+          }
+        }
+      }
+    },
+    "/lister-retours-declarant/1.0/{dateDebut}" : {
+      "get" : {
+        "tags" : [ "lister-retours-declarant" ],
+        "summary" : "lrdDeclarantPlageHoraireUsingGet-v1",
+        "description" : "Les services de recherche de fiches de parametrage renvoient toutes les fiches des entreprises declarees du ou des declarant(s) concernes par l'appel du service, ainsi que toutes les fiches des entreprises declarantes elles-memes. Dans le cas d'une recherche en tant que concentrateur pour son SIREN, le SIRET du declarant n'est pas renseigne.<br/> Le service peut renvoyer de 1 a N <fiche> pour chacun des 0 a N <declarant>. Le service de recherche par declarant renvoi toujours 1 et 1 seul <declarant>. Ainsi un declarant sans fiche n'est pas presente dans la reponse du service.",
+        "operationId" : "lrdDeclarantPlageHoraireUsingGet-v1",
+        "produces" : [ "application/xml" ],
+        "parameters" : [ {
+          "name" : "Authorization",
+          "in" : "header",
+          "description" : "Jeton d'authentification encode en base64<br/> Format <strong>DPAELogin jeton=...</strong>",
+          "required" : true,
+          "type" : "string"
+        }, {
+          "name" : "dateDebut",
+          "in" : "path",
+          "description" : "Date et heure de debut de la plage de recherche Ce champ est compare avec la date de publication d'un retour par un OPS (c'est-a-dire l'horodatage de son enregistrement sur le SI DPAE).<br/> pattern de date = <strong>yyyyMMddHHmmss</strong>",
+          "required" : true,
+          "type" : "string",
+          "format" : "date-time"
+        } ],
+        "deprecated" : false,
+        "responses" : {
+          "200" : {
+            "description" : "Les retours de plusieurs flux.",
+            "headers" : { },
+            "schema" : {
+              "$ref" : "#/definitions/retours"
+            }
+          },
+          "401" : {
+            "description" : "Jeton manquant ou invalide",
+            "headers" : {
+              "WWW-Authenticate" : {
+                "type" : "string",
+                "description" : "<ul> <li><u>Erreur d'authentification (inclus les fiches de parametrage)</u> = DPAELogin realm=«Jeton manquant ou invalide»</li> <li><u>Jeton expire (inclus les fiches de parametrage)</u> = DPAELogin realm=«Expiration du jeton»</li> <li><u>Declarant non-inscrit a la DPAE</u> = DPAELogin realm=«Utilisateur non-inscrit au service»</li> </ul>"
+              }
+            }
+          },
+          "404" : {
+            "description" : "cf. RFC 2616\n<!DOCTYPE HTML PUBLIC \"-//IETF//DTD HTML 2.0//EN\">\n<html>\n\n<head>\n\t<title>404 Not Found</title>\n</head>\n\n<body>\n\t<h1>Not Found</h1>\n\t<p>The requested URL /lister-retours-declarants/1.0/20220130083000 was not found on this server.</p>\n</body>\n\n</html>",
+            "headers" : { }
+          },
+          "406" : {
+            "description" : "Le client demande explicitement un format de reponse (Accept-Encoding) qui n'est pas supporte. Les formats supportes doivent inclure gzip ou ne rien preciser",
+            "headers" : { }
+          },
+          "415" : {
+            "description" : "Type de media non supporte",
+            "headers" : { }
+          },
+          "422" : {
+            "description" : "La requete n'a pas pu etre traitee, car les parametres sont invalides",
+            "headers" : { }
+          },
+          "429" : {
+            "description" : "Le client ne respecte pas les contraintes de polling (etendue de la plage de recherche) Solution temporaire : le code 422 sera remplace par 429 a terme, lorsque la version d'Apache le permettra",
+            "headers" : { }
+          }
+        }
+      }
+    },
+    "/lister-retours-declarant/1.0/{dateDebut}/{dateFin}" : {
+      "get" : {
+        "tags" : [ "lister-retours-declarant" ],
+        "summary" : "lrdDeclarantPlageHoraireFullUsingGet-v1",
+        "description" : "Les services de recherche de fiches de parametrage renvoient toutes les fiches des entreprises declarees du ou des declarant(s) concernes par l'appel du service, ainsi que toutes les fiches des entreprises declarantes elles-memes. Dans le cas d'une recherche en tant que concentrateur pour son SIREN, le SIRET du declarant n'est pas renseigne.<br/> Le service peut renvoyer de 1 a N <fiche> pour chacun des 0 a N <declarant>. Le service de recherche par declarant renvoi toujours 1 et 1 seul <declarant>. Ainsi un declarant sans fiche n'est pas presente dans la reponse du service.",
+        "operationId" : "lrdDeclarantPlageHoraireFullUsingGet-v1",
+        "produces" : [ "application/xml" ],
+        "parameters" : [ {
+          "name" : "Authorization",
+          "in" : "header",
+          "description" : "Jeton d'authentification encode en base64<br/> Format <strong>DPAELogin jeton=...</strong>",
+          "required" : true,
+          "type" : "string"
+        }, {
+          "name" : "dateDebut",
+          "in" : "path",
+          "description" : "Date et heure de debut de la plage de recherche. Ce champ est compare avec la date de publication d'un retour par un OPS (c'est-a-dire l'horodatage de son enregistrement sur le SI DPAE).<br/> pattern de date = <strong>yyyyMMddHHmmss</strong>",
+          "required" : true,
+          "type" : "string",
+          "format" : "date-time"
+        }, {
+          "name" : "dateFin",
+          "in" : "path",
+          "description" : "Date et heure de fin de la plage de recherche Le champ est facultatif afin de rechercher l'ensemble des retours a partir d'une date Ce champ est compare avec la date de publication d'un retour par un OPS (c'est-a-dire l'horodatage de son enregistrement sur le SI DPAE).<br/> pattern de date = <strong>yyyyMMddHHmmss</strong>",
+          "required" : true,
+          "type" : "string",
+          "format" : "date-time"
+        } ],
+        "deprecated" : false,
+        "responses" : {
+          "200" : {
+            "description" : "Les retours de plusieurs flux.",
+            "headers" : { },
+            "schema" : {
+              "$ref" : "#/definitions/retours"
+            }
+          },
+          "401" : {
+            "description" : "Jeton manquant ou invalide",
+            "headers" : {
+              "WWW-Authenticate" : {
+                "type" : "string",
+                "description" : "<ul> <li><u>Erreur d'authentification (inclus les fiches de parametrage)</u> = DPAELogin realm=«Jeton manquant ou invalide»</li> <li><u>Jeton expire (inclus les fiches de parametrage)</u> = DPAELogin realm=«Expiration du jeton»</li> <li><u>Declarant non-inscrit a la DPAE</u> = DPAELogin realm=«Utilisateur non-inscrit au service»</li> </ul>"
+              }
+            }
+          },
+          "404" : {
+            "description" : "cf. RFC 2616",
+            "headers" : { }
+          },
+          "406" : {
+            "description" : "Le client demande explicitement un format de reponse (Accept-Encoding) qui n'est pas supporte. Les formats supportes doivent inclure gzip ou ne rien preciser",
+            "headers" : { }
+          },
+          "415" : {
+            "description" : "Type de media non supporte",
+            "headers" : { }
+          },
+          "422" : {
+            "description" : "La requete n'a pas pu etre traitee, car les parametres sont invalides",
+            "headers" : { }
+          },
+          "429" : {
+            "description" : "Le client ne respecte pas les contraintes de polling (etendue de la plage de recherche) Solution temporaire : le code 422 sera remplace par 429 a terme, lorsque la version d'Apache le permettra",
+            "headers" : { }
+          }
+        }
+      }
+    },
+    "/telecharger-retour/1.0/{idFlux}/{idRetour}" : {
+      "get" : {
+        "tags" : [ "telecharger-retour" ],
+        "summary" : "telechargerRetourGet-v1",
+        "description" : "Ce service permet de telecharger les retours fournies dans la reponse des services de recherches des retours.",
+        "operationId" : "telechargerRetourGet-v1",
+        "produces" : [ "application/xml", "application/pdf" ],
+        "parameters" : [ {
+          "name" : "Authorization",
+          "in" : "header",
+          "description" : "Jeton d'authentification encode en base64<br/> Format <strong>DPAELogin jeton=...</strong>",
+          "required" : true,
+          "type" : "string"
+        }, {
+          "name" : "idFlux",
+          "in" : "path",
+          "description" : "id du flux",
+          "required" : true,
+          "type" : "string",
+          "maxLength" : 50,
+          "minLength" : 1
+        }, {
+          "name" : "idRetour",
+          "in" : "path",
+          "description" : "id du retour",
+          "required" : true,
+          "type" : "string",
+          "maxLength" : 10,
+          "minLength" : 1
+        } ],
+        "deprecated" : false,
+        "responses" : {
+          "200" : {
+            "description" : "Contenu du retour dans son format d'origine. Le format est precise dans l'en-tete Content-Type.",
+            "headers" : { },
+            "schema" : {
+              "$ref" : "#/definitions/envoi"
+            }
+          },
+          "401" : {
+            "description" : "Jeton manquant ou invalide",
+            "headers" : {
+              "WWW-Authenticate" : {
+                "type" : "string",
+                "description" : "<ul> <li><u>Erreur d'authentification (inclus les fiches de parametrage)</u> = DPAELogin realm=«Jeton manquant ou invalide»</li> <li><u>Jeton expire (inclus les fiches de parametrage)</u> = DPAELogin realm=«Expiration du jeton»</li> <li><u>Declarant non-inscrit a la DPAE</u> = DPAELogin realm=«Utilisateur non-inscrit au service»</li> </ul>"
+              }
+            }
+          },
+          "403" : {
+            "description" : "Le declarant ou le concentrateur tente de telecharger un retour qui porte sur une DPAE qu'il n'a pas deposee. Le declarant ou le concentrateur tente de telecharger un retour qui porte sur une DPAE qu'il n'a pas deposee",
+            "headers" : { }
+          },
+          "404" : {
+            "description" : "Identifiant du retour inconnu (egalement apres la purge du retour)",
+            "headers" : { }
+          },
+          "406" : {
+            "description" : "Le client demande explicitement un format de reponse (Accept-Encoding) qui n'est pas supporte. Les formats supportes doivent inclure gzip ou ne rien preciser",
+            "headers" : { }
+          },
+          "415" : {
+            "description" : "Type de media non supporte",
+            "headers" : { }
+          },
+          "422" : {
+            "description" : "La requete n'a pas pu etre traitee, car les parametres sont invalides",
+            "headers" : { }
+          }
+        }
+      }
+    }
+  },
+  "securityDefinitions" : { },
+  "definitions" : {
+    "identifiants" : {
+      "type" : "object",
+      "required" : [ "motdepasse", "nom", "prenom", "service", "siret" ],
+      "properties" : {
+        "siret" : {
+          "type" : "string",
+          "example" : "84080764800018",
+          "description" : "SIRET du declarant ou SIRET du concentrateur (SIRET de l'etablissement qui a signe la charte concentrateur)",
+          "minLength" : 14,
+          "maxLength" : 14
+        },
+        "nom" : {
+          "type" : "string",
+          "example" : "John",
+          "description" : "Nom du declarant ou raison sociale du concentrateur",
+          "minLength" : 1,
+          "maxLength" : 64,
+          "pattern" : "^([a-zA-ZeeeeaaauuuiioocEEEEAAAUUUIIOOC]+['\\- ])*[a-zA-ZeeeeaaauuuiioocEEEEAAAUUUIIOOC]+$"
+        },
+        "prenom" : {
+          "type" : "string",
+          "example" : "Doe",
+          "description" : "Prenom du declarant ou du concentrateur",
+          "minLength" : 1,
+          "maxLength" : 39,
+          "pattern" : "^([a-zA-ZeeeeaaauuuiioocEEEEAAAUUUIIOOC]+['\\- ])*[a-zA-ZeeeeaaauuuiioocEEEEAAAUUUIIOOC]+$"
+        },
+        "motdepasse" : {
+          "type" : "string",
+          "description" : "Mot de passe du declarant ou mot de passe du concentrateur<br/>Le mot de passe est transmis en clair a chaque authentification. Par contre celui-ci doit etre chiffre s'il est stocke dans un logiciel de paie.",
+          "minLength" : 8,
+          "maxLength" : 30
+        },
+        "service" : {
+          "type" : "integer",
+          "format" : "int32",
+          "example" : 97,
+          "description" : "Le code du service Net-Entreprises correspondant a la DPAE. 98 pour obtenir un jeton en tant que concentrateur et 25 pour un jeton \"direct\" pour les cotisants"
+        }
+      },
+      "title" : "identifiants"
+    },
+    "retours" : {
+      "type" : "object",
+      "properties" : {
+        "flux" : {
+          "type" : "array",
+          "items" : {
+            "$ref" : "#/definitions/flux"
+          }
+        }
+      },
+      "title" : "retours"
+    },
+    "flux" : {
+      "type" : "object",
+      "required" : [ "id" ],
+      "properties" : {
+        "id" : {
+          "type" : "string",
+          "example" : "F1spdeAilkR4q3UUlQA7haa",
+          "minLength" : 1,
+          "maxLength" : 50
+        },
+        "retour" : {
+          "type" : "array",
+          "items" : {
+            "$ref" : "#/definitions/retour"
+          }
+        }
+      },
+      "title" : "flux"
+    },
+    "retour" : {
+      "type" : "object",
+      "required" : [ "nature", "production", "publication", "statut" ],
+      "properties" : {
+        "publication" : {
+          "type" : "string",
+          "format" : "date-time",
+          "description" : "Date a laquelle le SI DPAE a mis le retour a disposition des services de recherche<br/> <u>Format date = yyyyMMddhhmmss</u>"
+        },
+        "production" : {
+          "type" : "string",
+          "format" : "date-time",
+          "description" : "La date metier est fournie par l'OPS ou le delegataire a l'origine du retour. Elle correspond a la date de production du document, ou a la date d'emission s'il s'agit simplement d'une notification.<br/> <u>Format date = yyyyMMddhhmmss</u>"
+        },
+        "ops" : {
+          "type" : "string",
+          "example" : "SI DPAE",
+          "description" : "Identifiant de l'OPS renseigne dans la declaration (S21.G00.70.002 et/ou S21.G00.15.002) faisant l'objet du bilan. Non renseigne s'il s'agit d'un retour par le SI DPAE ou par un organisme de base. Toujours renseigne si un identifiant du delegataire est present. OPSINCONNU dans le cas d'un organisme non reference",
+          "minLength" : 5,
+          "maxLength" : 10
+        },
+        "delegataire" : {
+          "type" : "string",
+          "example" : "X2ACF",
+          "description" : "Identifiant du delegataire de gestion renseigne dans la declaration (S21.G00.70.003 et/ou S21.G00.15.003) faisant l'objet du bilan",
+          "minLength" : 5,
+          "maxLength" : 9
+        },
+        "nature" : {
+          "type" : "integer",
+          "format" : "int32",
+          "example" : 50,
+          "description" : "Nature du retour permettant d'identifier de maniere unique un retour, en provenance d'un meme OPS destinataire. Il peut donc y avoir plusieurs retours de meme nature mais en provenance d'OPS differents."
+        },
+        "statut" : {
+          "$ref" : "#/definitions/Statut"
+        },
+        "id" : {
+          "type" : "string",
+          "example" : "0123456789",
+          "description" : "Pour retrocompatibilite uniquement Cf « URL du telechargement du retour »",
+          "minLength" : 1,
+          "maxLength" : 10
+        },
+        "url" : {
+          "type" : "string",
+          "description" : "URL permettant le telechargement du retour. Le champ n'est renseigne que <br/> <ul> <li>si un document est associe a cette nature de retour</li> <li>si le statut du retour a permis la production d'un document (un KO par exemple peut ne pas etre accompagne d'un retour)</li>"
+        }
+      },
+      "title" : "retour"
+    },
+    "envoi" : {
+      "type" : "object",
+      "properties" : {
+        "envoi_identification" : {
+          "$ref" : "#/definitions/envoi_identification"
+        },
+        "envoi_bilan" : {
+          "$ref" : "#/definitions/envoi_bilan"
+        }
+      },
+      "title" : "envoi"
+    },
+    "envoi_identification" : {
+      "type" : "object",
+      "properties" : {
+        "declarant" : {
+          "$ref" : "#/definitions/declarant"
+        }
+      },
+      "title" : "envoi_identification"
+    },
+    "envoi_bilan" : {
+      "type" : "object",
+      "properties" : {
+        "envoi_etat" : {
+          "$ref" : "#/definitions/retours"
+        }
+      },
+      "title" : "envoi_bilan"
+    },
+    "declarant" : {
+      "type" : "object",
+      "properties" : {
+        "siret" : {
+          "type" : "string",
+          "example" : "84080764800018",
+          "description" : "SIRET du declarant ou SIRET du concentrateur (SIRET de l'etablissement qui a signe la charte concentrateur)",
+          "minLength" : 14,
+          "maxLength" : 14
+        },
+        "nom" : {
+          "type" : "string",
+          "example" : "John",
+          "description" : "Nom du declarant ou raison sociale du concentrateur",
+          "minLength" : 1,
+          "maxLength" : 64,
+          "pattern" : "^([a-zA-ZeeeeaaauuuiioocEEEEAAAUUUIIOOC]+['\\- ])*[a-zA-ZeeeeaaauuuiioocEEEEAAAUUUIIOOC]+$"
+        },
+        "prenom" : {
+          "type" : "string",
+          "example" : "Doe",
+          "description" : "Prenom du declarant ou du concentrateur",
+          "minLength" : 1,
+          "maxLength" : 39,
+          "pattern" : "^([a-zA-ZeeeeaaauuuiioocEEEEAAAUUUIIOOC]+['\\- ])*[a-zA-ZeeeeaaauuuiioocEEEEAAAUUUIIOOC]+$"
+        }
+      },
+      "title" : "declarant"
+    },
+    "Statut" : {
+      "type" : "string",
+      "title" : "Statut",
+      "description" : "Indique le resultat du traitement metier a cette etape.",
+      "example" : "OK",
+      "enum" : [ "OK", "KO", "ANO", "EN_COURS" ]
+    }
+  },
+  "externalDocs" : {
+    "description" : "Guide DPAE",
+    "url" : "https://www.dpae-edi.urssaf.fr/5492-API-DPAE-Guide-Implementation.pdf"
+  }
+}
