@@ -1,8 +1,28 @@
 {
     "name": "thebeardedbear/urssaf-dpae",
     "description": "Client and domain model for the URSSAF \"API DPAE\" (Déclaration Préalable À l'Embauche: deposit and returns)",
-    "license": "proprietary",
+    "license": "MIT",
     "type": "symfony-bundle",
+    "keywords": [
+        "urssaf",
+        "api",
+        "dpae",
+        "declaration-prealable-embauche",
+        "embauche",
+        "symfony-bundle"
+    ],
+    "authors": [
+        {
+            "name": "TheBeardedBear",
+            "homepage": "https://github.com/TheBeardedBearSAS"
+        }
+    ],
+    "homepage": "https://github.com/TheBeardedBearSAS/urssaf-dpae",
+    "support": {
+        "issues": "https://github.com/TheBeardedBearSAS/urssaf-dpae/issues",
+        "source": "https://github.com/TheBeardedBearSAS/urssaf-dpae",
+        "security": "https://github.com/TheBeardedBearSAS/urssaf-dpae/security/policy"
+    },
     "require": {
         "php": ">=8.2"
     },
