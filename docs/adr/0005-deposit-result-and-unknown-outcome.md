@@ -131,3 +131,19 @@ specification values, and are listed in §5.8.
   [ADR 0008](0008-doctrine-persistence.md)).
 - This ADR defines the reconciliation key that ADR 0000 left open; it cannot be `IdFluxDPAE`, which the lost answer
   carried.
+
+## Amendment 2026-11-22 — shape of the result types
+
+Refines "Result sum type" as implemented in lot 1.
+
+- `DepositResult` is an interface, sealed **by convention** only (PHP 8.2 has no sealed types): `flowId(): ?FlowId`,
+  `declarantSiret(): ?Siret`, `generatedAt(): ?Instant`, `document(): RawDocument`.
+- `ElectronicReceipt::of(?FlowId, ?Siret, ?Instant, RawDocument)`; `RejectionNotice::of(?FlowId, ?Siret, ?Instant,
+  RawDocument, list<string> $reasons)`. The generation date is a `Shared\Instant` (UTC, second precision), not a
+  `DateTimeImmutable`; the reasons are the raw strings found in the notice (possibly none), not code / label pairs.
+- `Deposit\RawDocument`: the answer bytes (non-blank) and the raw `Content-Type` value, kept verbatim.
+- Privacy: `__debugInfo()` of `RawDocument`, `ElectronicReceipt`, `RejectionNotice` (and `ReturnContent`) shows the size
+  and SHA-256 of the content, never the content; a rejection notice shows only the number of reasons. These objects, as
+  `DpaeFlow`, cannot be serialized (`Domain\Exception\PayloadNotSerializable`, a `LogicException` implementing
+  `UrssafException`).
+- `Deposit\FlowFingerprint` lives in the `Deposit` namespace (not `Declaration`).

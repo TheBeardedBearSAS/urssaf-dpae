@@ -91,3 +91,16 @@ catalogue. The DPAE API exchanges XML, gzip and PDF ([api-reference.md](../api-r
   flows.
 - Without published answer schemas the readers are tolerant and keep the raw XML; they are tightened against the
   samples captured by the contract tests (§5.9).
+
+## Amendment 2026-11-22 — ext-dom in the Domain for `DpaeFlow`
+
+"`SafeXmlReader` is the only entry point to `ext-dom`" is relaxed for the raw flow only: the Domain class
+`DpaeFlow` (ADR 0003 amendment) parses the caller's bytes itself, to check well-formedness, the absence of a DOCTYPE,
+the root element and the test indicator, so that a `DpaeFlow` cannot exist unchecked. It uses `DOMDocument::loadXML()`
+with the **same libxml options** as `SafeXmlReader`, exposed as `DpaeFlow::LIBXML_OPTIONS` (`LIBXML_NONET`; no
+`LIBXML_NOENT`, `LIBXML_DTDLOAD`, `LIBXML_DTDATTR` nor `LIBXML_PARSEHUGE`; no DTD, no external entity), with internal
+error collection and no libxml state leaked. Answers from URSSAF still go through `SafeXmlReader` only.
+
+Equivalence is tested, not assumed: `DpaeFlowLibxmlOptionsTest` runs a hostile corpus (external file entity, network
+entity, internal entity, external subset) through the options and through `DpaeFlow::fromXml()`. `SafeXmlReader`'s own
+test must run the same corpus with `DpaeFlow::LIBXML_OPTIONS` when the class is written (lot 3): it does not exist yet.

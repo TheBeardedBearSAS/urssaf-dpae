@@ -92,3 +92,23 @@ authentication call writes nothing).
 - Hosts that store the password must encrypt it themselves (`CredentialsProvider`), as stated by §2.1; the package
   never stores it.
 - This ADR refines ADR 0000 §"Authentication": the token store is in memory only, with no opt-in shared store.
+
+## Amendment 2026-11-22 — token charset, credentials factory, `service` range
+
+Decided while implementing the Domain value objects (lot 1).
+
+- **Token charset.** The "visible ASCII only" check is dropped: the token charset is not published (§2.1, §5.6), so
+  the package must not refuse a token on a guess. `DpaeToken::fromResponseBody()` refuses **only control characters**
+  (CR, LF, NUL, DEL and anything below `0x20`, which is what could split or inject a header); a space inside the
+  value and bytes above `0x7F` are accepted. Leading and trailing ASCII whitespace is still removed, and an empty
+  result is still refused (`dpae_token.empty`, `dpae_token.invalid_format`).
+- **Credentials factory.** `DeclarantCredentials` has a private constructor and a `DeclarantCredentials::of(Siret, nom,
+  prenom, motdepasse, ServiceCode)` factory; `nom`, `prenom` and `motdepasse` are `#[SensitiveParameter]`. Lengths are
+  counted with `mb_check_encoding()` + `mb_strlen()` (UTF-8), the single counting method of the Domain.
+- **Serialization.** `DpaeToken` and `DeclarantCredentials` throw the dedicated
+  `Domain\Exception\CredentialsNotSerializable` (`LogicException`, implements `UrssafException`) on `serialize()` and
+  `unserialize()`. Limit: `var_export()`, an `(array)` cast and reflection bypass `__debugInfo()` and this ban; they
+  cannot be prevented in PHP and are documented on both classes.
+- **`service` range.** `ServiceCode` keeps the Swagger `int32` bound: a value outside `-2147483648..2147483647` is
+  refused locally with `service_code.out_of_range` (`InvalidValue`). Any in-range integer is accepted and sent as is,
+  as decided above.

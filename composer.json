@@ -24,7 +24,10 @@
         "security": "https://github.com/TheBeardedBearSAS/urssaf-dpae/security/policy"
     },
     "require": {
-        "php": ">=8.2"
+        "php": ">=8.2",
+        "ext-dom": "*",
+        "ext-libxml": "*",
+        "ext-mbstring": "*"
     },
     "require-dev": {
         "carthage-software/mago": "^1.59",

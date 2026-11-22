@@ -84,3 +84,24 @@ simulator configuration, must be impossible.
   §5.12 and the README.
 - This ADR adapts ADR 0000 ("simulator refused with the real mode instead of the production environment"): the
   refusal is enforced both by installation mode and by deposit mode.
+
+## Amendment 2026-11-22 — the mode check lives in the Domain
+
+Replaces the "raw XML flows" bullet and the factory signature of the "mode in the flow" section.
+
+- **Where.** The check is made by `Domain\Declaration\DpaeFlow` itself, not by the application layer:
+  `DpaeFlow::fromXml(string $bytes, DeclarationMode $mode, TestIndicators $indicators)`. A `DpaeFlow` that exists is
+  therefore always consistent with its mode.
+- **`Domain\Declaration\TestIndicators`** holds the expected `FR_DUE_Upload.Test.Indicator` per mode: `Real` → `120`,
+  `Test` → `TST` by default (`TestIndicators::defaults()`), configurable with `TestIndicators::of($real, $test)`
+  (fed by `ApiConfiguration::testIndicator()`). The values are inferred from the `C_VERSION` rule (§3.3) and stay an
+  open point (§5.2). The two values must be non-blank and different, otherwise the guard would be void.
+- **Comparison.** Strict string equality with the text content of the `FR_DUE_Upload.Test.Indicator` **child of the
+  root** (no trimming, case-sensitive, nested or prefixed elements ignored). A missing element, or any other value,
+  is `ValidationFailed` with code `flow.declaration_mode_mismatch` (path `flow`, parameter `mode`). The official
+  example (`120`) is a `Real` flow; it is refused in `Test` mode.
+- **Flat flows.** An input whose first significant byte (after an optional UTF-8 BOM and XML whitespace) is not `<` is
+  not an XML flow: `flow.format_not_supported`, distinct from `flow.not_well_formed` (XML that does not parse). A
+  blank input stays `flow.empty`. A UTF-16 document is not an XML flow either for this check.
+- Order of the checks: `flow.empty`, `flow.format_not_supported`, `flow.not_well_formed`, `flow.dtd_not_allowed`,
+  `flow.unexpected_root`, `flow.declaration_mode_mismatch`.

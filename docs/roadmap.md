@@ -22,24 +22,41 @@ the first version covers **phase 1 (raw-flow deposit) + the declaration model** 
 
 ## Domain (`src/Domain`)
 
-- `Declarant\DeclarantCredentials` (`siret`, `nom`, `prenom`, `motdepasse`, `service`; Swagger lengths only),
-  `Declarant\Siret` (14 chars), `Declarant\ServiceCode` (raw integer + `ServiceKind` `Direct` 25 / `Concentrator` 98),
-  `Tenant\TenantId` ([ADR 0001](adr/0001-xml-token-authentication.md)).
+Split into lots; each lot is merged green (100 % coverage, MSI 100 %).
+
+### Lot 1 — value objects, sum types, exceptions
+
+- `Declarant\DeclarantCredentials` (`siret`, `nom`, `prenom`, `motdepasse`, `service`; Swagger lengths only; private
+  constructor, `of()`), `Declarant\Siret` (14 chars), `Declarant\ServiceCode` (raw int32 + `ServiceKind` `Direct` 25 /
+  `Concentrator` 98) ([ADR 0001](adr/0001-xml-token-authentication.md)).
 - `Authentication\DpaeToken` (opaque, never logged, never persisted), `Exception\AuthenticationFailure` (realm enum).
-- `Declaration\DeclarationMode` (`Test|Real`), `Declaration\DpaeFlow` (raw XML via `fromXml($bytes, $mode)` or built,
-  always with its mode, and its `FlowFingerprint`) ([ADR 0003](adr/0003-declaration-mode-and-simulator-guard.md)).
-- `Deposit\ExternalReference` (the host's identifier of the hire).
-- `Declaration\Declaration`, `Employer`, `Employee`, `Contract`, `ContractType` (`Cdd|Cdi|Ctt`), validated with the
-  §3.4 rules of [ADR 0007](adr/0007-declaration-model.md) (notification pattern, `normCode` parameter).
-- `Deposit\FlowId` (`IdFluxDPAE`, 1–50), `Deposit\FlowFingerprint`, `Deposit\ElectronicReceipt`,
-  `Deposit\RejectionNotice`, `Deposit\DepositResult` (sum type), `Deposit\Deposit` aggregate and `DepositState`
-  (`pending`, `depositing`, `received`, `rejected`, `failed`, `outcome_unknown`, `not_received`, `invalid_credentials`)
+- `Declaration\DeclarationMode` (`Test|Real`), `Declaration\TestIndicators`, `Declaration\DpaeFlow` (raw XML via
+  `fromXml($bytes, $mode, $indicators)`, always with its mode; the flow fingerprint is `Deposit\FlowFingerprint`)
+  ([ADR 0003](adr/0003-declaration-mode-and-simulator-guard.md)).
+- `Deposit\FlowId` (`IdFluxDPAE`, 1-50), `Deposit\FlowFingerprint`, `Deposit\RawDocument`, `Deposit\ElectronicReceipt`,
+  `Deposit\RejectionNotice`, `Deposit\DepositResult` (sum type by convention)
   ([ADR 0005](adr/0005-deposit-result-and-unknown-outcome.md)).
-- `Return\ReturnReference` (flux id, return id 1–10, nature, statut, publication, production, ops, delegataire, url;
-  raw values kept), `Return\ReturnNature` (`10|11|20|41`, unknown preserved), `Return\ReturnStatus`
-  (`OK|KO|ANO|EN_COURS`, unknown preserved), `Return\ReturnContent` (raw bytes + content type), `Return\DownloadState`
+- `Return\ReturnReference` (private constructor, `fromListing()`; flux id, nature, statut, publication, production, ops,
+  delegataire, id, url; every value stored raw), `Return\ReturnId` (`idRetour` 1-10, checked at download),
+  `Return\ReturnIdentity`, `Return\ReturnNature` (`10|11|20|41`, unknown preserved), `Return\ReturnStatus`
+  (`OK|KO|ANO|EN_COURS`, unknown preserved), `Return\ReturnContent` (raw bytes + raw content type),
+  `Return\ReturnContentType` ([ADR 0006](adr/0006-polling-constraints.md)).
+- `Shared\Instant`, `Validation\*` (notification pattern), `Domain\Exception\*` (reference hierarchy,
+  `CredentialsNotSerializable`, `PayloadNotSerializable`).
+
+### Lot 2 — declaration model
+
+- `Declaration\Declaration`, `Employer`, `Employee`, `Contract`, `ContractType` (`Cdd|Cdi|Ctt`) and the builder,
+  validated with the section 3.4 rules of [ADR 0007](adr/0007-declaration-model.md) (notification pattern, `normCode`
+  parameter).
+
+### Lot 5 — Application (domain parts)
+
+- `Tenant\TenantId` ([ADR 0001](adr/0001-xml-token-authentication.md)), `Deposit\ExternalReference` (the host's
+  identifier of the hire), the `Deposit\Deposit` aggregate with `DepositState` (`pending`, `depositing`, `received`,
+  `rejected`, `failed`, `outcome_unknown`, `not_received`, `invalid_credentials`)
+  ([ADR 0005](adr/0005-deposit-result-and-unknown-outcome.md)) and `Return\DownloadState`
   ([ADR 0006](adr/0006-polling-constraints.md)).
-- `Domain\Exception\*` (reference hierarchy).
 
 ## Application (`src/Application`)
 
@@ -107,7 +124,7 @@ the API itself. Symfony components in `require-dev` `^6.4.3 || ^7.4 || ^8.0`, Sy
 ## Order of work
 
 1. Replace `Environment` / `UrssafEndpoints` (ADR 0002) and complete `deptrac.yaml` (Contract, Testing, Standalone).
-2. Domain value objects, sum types, declaration model and its validation.
+2. Domain: lot 1 (value objects, sum types, exceptions), then lot 2 (declaration model and its validation).
 3. Wire writers/readers + fixtures (`SafeXmlReader`, identifiants, envoi, retours, declaration writer).
 4. HTTP gateway (authentication, deposit, lists, download, status mapping, 422 / 429).
 5. Application commands/queries (deposit, synchronisation, download, reconciliation).

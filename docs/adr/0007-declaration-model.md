@@ -101,3 +101,12 @@ employer set is `a-zA-Z0-9éèêë âàä öô ûü îï ç°² !#$%&'()*+,-./:;
 - This ADR supersedes "later phase" in [api-reference.md](../api-reference.md) §4.4 and [roadmap.md](../roadmap.md).
   New elements, the flat format or several hires per flow are added once the *Dessin d'enregistrement DPAE* is
   published, each with an amendment.
+
+## Amendment 2026-11-22 — `DpaeFlow::fromXml()` signature and checks
+
+`DpaeFlow::fromXml(string $bytes, DeclarationMode $mode, TestIndicators $indicators)` replaces
+`fromXml($bytes, $mode)`: the indicator is checked **inside the Domain**, against the indicator expected for `$mode`
+([ADR 0003](0003-declaration-mode-and-simulator-guard.md) amendment). A flat flow is refused with
+`flow.format_not_supported`, an indicator that is missing or does not match with `flow.declaration_mode_mismatch`.
+`DpaeFlow::declaredIndicator()` is removed (nothing is left for the application layer to check). `DeclarationXmlWriter`
+(built flows) writes the indicator from the same `TestIndicators`, so a built flow passes the same check.
