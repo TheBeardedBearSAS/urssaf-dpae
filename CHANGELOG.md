@@ -9,6 +9,23 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ### Added
 
+- Doctrine bridge (lot 7, ADR 0008, 0009, optional: `doctrine/orm`, `doctrine/dbal`, `doctrine/doctrine-bundle` stay `require-dev` + `suggest`, with
+  the `conflict` floors): `Bridge\Doctrine\{DoctrineDepositRepository, DoctrineReturnRepository, DoctrineReturnContentStore,
+  DoctrineSyncCursorRepository, DoctrineOutbox, DoctrineTransactionManager, DoctrineDepositFlowStore, DoctrineIntegration}`.
+  XML mapping of six row entities and nine DBAL types, all prefixed `urssaf_dpae_` (tables `urssaf_dpae_deposits`,
+  `_deposit_flows`, `_returns`, `_return_contents`, `_sync_cursors`, `_outbox`; indexes `idx_urssaf_dpae_*` /
+  `uniq_urssaf_dpae_*`). The repositories write with DBAL, not the unit of work: the claim is one conditional `UPDATE`, the
+  deposit carries an optimistic version (`deposit.concurrent_modification`, the entity manager stays open), `withoutFlowId()`
+  and `staleDepositing()` order by claim then id and limit in the query, open reference and fingerprint are unique per tenant
+  through two derived columns, savepoints for nested transactions. Returns and their contents are kept beyond the URSSAF
+  3-month purge; the package sets no retention period, the host calls `deleteDownloadedBefore()`, `deleteSeenBefore()`,
+  `deleteFinishedBefore()` and `Outbox::purgeDispatchedBefore()`. Schema and personal-data guidance in
+  [docs/doctrine.md](docs/doctrine.md); **no migration is shipped**. The in-memory and the Doctrine adapters pass the same
+  repository contract traits (functional tests on SQLite, in memory).
+  Erasure by key (`DoctrineDepositRepository::delete()`, `deleteByReference()`, `DoctrineDepositFlowStore::delete()`);
+  `DoctrineIntegration::doctrineBundleConfigurationFor('urssaf')` maps a dedicated entity manager; a `downloaded` return is not
+  overwritten by a stale synchronisation, and is "no longer available" without a call once its document was purged; a
+  reference held by an open deposit of the same fingerprint is `deposit.concurrent_modification` (retryable).
 - Application layer (lot 5, ADR 0003, 0005, 0006, 0008): `Domain\Deposit\{Deposit, DepositId, DepositState, ExternalReference}`
   (the ADR 0005 lifecycle), `Domain\Return\{TrackedReturn, DownloadState, SyncCursor}`, domain events and the public
   integration events `Contract\Event\*` (`urssaf.dpae.*`, codec); the handlers `DepositDpae` (idempotent per tenant by

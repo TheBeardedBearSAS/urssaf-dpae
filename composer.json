@@ -107,6 +107,9 @@
         "symfony/messenger": "<6.4.3"
     },
     "suggest": {
+        "doctrine/dbal": "Required by the Doctrine bridge (custom types, DBAL repositories)",
+        "doctrine/doctrine-bundle": "Required to use the Doctrine bridge in a Symfony application",
+        "doctrine/orm": "Required by the Doctrine bridge (mapping of the tables, schema and migrations)",
         "nyholm/psr7": "PSR-17 factories for the HTTP gateway (any PSR-17 implementation works)",
         "symfony/http-client": "PSR-18 compatible HTTP client for the API (any PSR-18 client works)"
     },

@@ -42,6 +42,16 @@ parameters:
                 - Symfony\Component\HttpKernel\Bundle\AbstractBundle
                 - Symfony\Component\Console\Command\Command
                 - Symfony\Component\HttpKernel\Kernel
+        # Doctrine generates lazy-loading proxies by extending the mapped entities (and pre-generates them at cache warm-up),
+        # so the row entities of the Doctrine bridge cannot be final nor readonly; they are final by convention (@final).
+        final:
+            classesNotRequiredToBeAbstractOrFinal:
+                - TheBeardedBear\UrssafDpae\Bridge\Doctrine\Entity\DepositFlowRecord
+                - TheBeardedBear\UrssafDpae\Bridge\Doctrine\Entity\DepositRecord
+                - TheBeardedBear\UrssafDpae\Bridge\Doctrine\Entity\OutboxMessage
+                - TheBeardedBear\UrssafDpae\Bridge\Doctrine\Entity\ReturnContentRecord
+                - TheBeardedBear\UrssafDpae\Bridge\Doctrine\Entity\ReturnRecord
+                - TheBeardedBear\UrssafDpae\Bridge\Doctrine\Entity\SyncCursorRecord
         # Disabled rules (DDD value objects / domain model), each one justified:
         # Optional value-object arguments and "withX" factories legitimately default (e.g. currency, locale).
         noConstructorParameterWithDefaultValue:

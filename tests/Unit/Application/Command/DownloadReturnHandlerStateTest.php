@@ -14,6 +14,7 @@ namespace TheBeardedBear\UrssafDpae\Tests\Unit\Application\Command;
 
 use PHPUnit\Framework\TestCase;
 use TheBeardedBear\UrssafDpae\Application\Command\DownloadReturn;
+use TheBeardedBear\UrssafDpae\Application\Command\DownloadReturnHandler;
 use TheBeardedBear\UrssafDpae\Application\Policy\WorkflowPolicy;
 use TheBeardedBear\UrssafDpae\Application\Port\Urssaf\ReturnNoLongerAvailable;
 use TheBeardedBear\UrssafDpae\Application\Port\Urssaf\ReturnNotDownloadable;
@@ -22,6 +23,7 @@ use TheBeardedBear\UrssafDpae\Domain\Return\DownloadState;
 use TheBeardedBear\UrssafDpae\Domain\Return\ReturnContent;
 use TheBeardedBear\UrssafDpae\Domain\Return\ReturnReference;
 use TheBeardedBear\UrssafDpae\Domain\Return\TrackedReturn;
+use TheBeardedBear\UrssafDpae\Infrastructure\Persistence\InMemory\InMemoryReturnContentStore;
 use TheBeardedBear\UrssafDpae\Tests\Unit\Application\Fake\Harness;
 use TheBeardedBear\UrssafDpae\Tests\Unit\Application\Fake\Outcome;
 use TheBeardedBear\UrssafDpae\Tests\Unit\Application\Fake\SampleReturns;
@@ -108,6 +110,21 @@ final class DownloadReturnHandlerStateTest extends TestCase
         $downloaded = $harness->downloadHandler()(self::command($reference));
 
         static::assertSame($content, $downloaded);
+        static::assertSame(DownloadState::Downloaded, $harness->returns->find(Samples::tenant('tenant-1'), $reference->identity())?->downloadState());
+    }
+
+    public function testADownloadedReturnWhoseContentWasPurgedIsUnavailableWithoutACall(): void
+    {
+        $harness = Harness::snapshotting(WorkflowPolicy::defaults());
+        $reference = self::tracked($harness);
+        $harness->gateway->willDownload(ReturnContent::of('<doc/>', 'application/xml'));
+        $harness->downloadHandler()(self::command($reference));
+        $afterPurge = new DownloadReturnHandler($harness->returns, new InMemoryReturnContentStore(), $harness->gateway, $harness->clock, $harness->unitOfWork); // the documents were purged by the host
+
+        $failure = Outcome::of(static fn(): ReturnContent => $afterPurge(self::command($reference)));
+
+        static::assertInstanceOf(ReturnNoLongerAvailable::class, $failure);
+        static::assertCount(1, $harness->gateway->downloadCalls());
         static::assertSame(DownloadState::Downloaded, $harness->returns->find(Samples::tenant('tenant-1'), $reference->identity())?->downloadState());
     }
 }

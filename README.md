@@ -22,7 +22,8 @@ Developed and maintained by [The Bearded Bear](https://the-bearded-bear.com).
 
 > 🚧 **Work in progress.** The domain model, the HTTP gateway and the application layer (deposit, return
 > synchronisation, download, reconciliation of a lost answer) are implemented and usable without a framework, see the
-> quick start below. The Symfony and Doctrine bridges follow, see [docs/roadmap.md](docs/roadmap.md).
+> quick start below. The Doctrine bridge (durable persistence, [docs/doctrine.md](docs/doctrine.md)) is implemented; the
+> Symfony bridge follows, see [docs/roadmap.md](docs/roadmap.md).
 
 ## Scope
 
@@ -91,12 +92,16 @@ $dpae->reconcileUnknownDeposits()(new ReconcileUnknownDeposits($tenant));
 
 A deposit is **never resent** once it may have reached URSSAF: a lost answer leaves it `outcome_unknown` until the
 reconciliation finds the flux in the return list. The defaults keep everything in memory (`Standalone\Persistence`): the
-full lifecycle needs durable repositories (the Doctrine bridge, [ADR 0008](docs/adr/0008-doctrine-persistence.md)). In
+full lifecycle needs durable repositories, the Doctrine bridge ([ADR 0008](docs/adr/0008-doctrine-persistence.md),
+[docs/doctrine.md](docs/doctrine.md): optional `doctrine/orm` 3 and `doctrine/dbal` 4, tables prefixed `urssaf_dpae_`, no
+migration shipped, retention and encryption of the personal data are yours): build a `Persistence` from the
+`Doctrine*` repositories of one entity manager and give it to `UrssafDpaeBuilder::withPersistence()`. In
 your tests, `UrssafDpaeBuilder::withGateway()` takes a `Testing\SimulatedDpaeGateway`, refused in a `real` installation.
 
 ## Documentation
 
 - [docs/api-reference.md](docs/api-reference.md) — technical reference (single source of truth for the package).
+- [docs/doctrine.md](docs/doctrine.md) — Doctrine persistence: schema, concurrency, transactions, personal data (GDPR).
 - [docs/roadmap.md](docs/roadmap.md) — planned architecture and order of work.
 - [docs/openapi/](docs/openapi/) — official OpenAPI contract(s) from the URSSAF API portal.
 - `docs/reference/` — official URSSAF documentation: not versioned (URSSAF documents), download it from the links in [docs/api-reference.md](docs/api-reference.md) into this local, git-ignored folder.

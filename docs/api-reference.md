@@ -649,3 +649,16 @@ section references; this list is the summary.
     channel deposited in the same window would be adopted if it is the only one. For a concentrator the deposit does not
     know its declarant SIRET (the flow's employer SIRET is not read), so the comparison could not be made anyway. To be
     closed with the contract-test samples of the AEE.
+24. **Doctrine bridge** (lot 7, [ADR 0008](adr/0008-doctrine-persistence.md) amendments, [docs/doctrine.md](doctrine.md)).
+    Where the schema departs from the ADR table, because the aggregates dictate it: `nature` / `statut` are stored raw
+    only (the parsed values are derived by the domain); `ops` is a non-null string with a `has_ops` flag, so an absent
+    `ops` stays different from an empty one; the answer of URSSAF is one JSON `result` column (kind, flow id, SIRET,
+    instant, reasons, raw document in base 64), there is no `size` column and an `adopted` column is added; a return has a
+    derived key (SHA-256 of tenant, flux, nature, ops) that its stored content shares; `urssaf_dpae_deposit_flows` is
+    written only through `DoctrineDepositFlowStore`, which the package never calls. A unique violation on a deposit save is
+    reported as `deposit.reference_conflict`, `deposit.flow_already_open` or `deposit.concurrent_modification` (existing
+    codes, no new one). The functional tests run on SQLite only: MySQL, MariaDB and PostgreSQL are not exercised, the
+    statements stay portable and the unique indexes never rely on a partial index (SQL Server treats `NULL`s as equal in a
+    unique index and is not supported). The retention period of the copy of the host (the specification publishes only the
+    3 months of URSSAF and the 13 months of the consultation service, §1.2) is the host's: the package only offers the
+    `delete…Before()` building blocks.

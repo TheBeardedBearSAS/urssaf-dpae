@@ -21,13 +21,14 @@ use TheBeardedBear\UrssafDpae\Application\Port\Urssaf\ReturnNotDownloadable;
 use TheBeardedBear\UrssafDpae\Application\Service\RecordedEvents;
 use TheBeardedBear\UrssafDpae\Application\Service\UnitOfWork;
 use TheBeardedBear\UrssafDpae\Domain\Exception\RecordNotFound;
+use TheBeardedBear\UrssafDpae\Domain\Return\DownloadState;
 use TheBeardedBear\UrssafDpae\Domain\Return\ReturnContent;
 use TheBeardedBear\UrssafDpae\Domain\Return\TrackedReturn;
 use TheBeardedBear\UrssafDpae\Domain\Shared\Instant;
 
 /**
  * Downloads the document of a tracked return and keeps it (ADR 0006, 0008). A document already stored is returned
- * without a call. A 404 marks the return `purged`, a return with no usable document `not_downloadable`; both are
+ * without a call; a return `downloaded` whose document was purged from the store is unavailable, without a call. A 404 marks the return `purged`, a return with no usable document `not_downloadable`; both are
  * rethrown after the state was saved. Downloads are read-only: transport errors and 5xx stay retryable.
  */
 final readonly class DownloadReturnHandler
@@ -42,7 +43,7 @@ final readonly class DownloadReturnHandler
 
     /**
      * @throws RecordNotFound          `return.not_found` when the return was never listed
-     * @throws ReturnNoLongerAvailable the return is purged
+     * @throws ReturnNoLongerAvailable the return is purged, or its stored document was
      * @throws ReturnNotDownloadable   the return has no document, or its `url` is outside the download origin
      */
     public function __invoke(DownloadReturn $command): ReturnContent
@@ -52,6 +53,11 @@ final readonly class DownloadReturnHandler
         $stored = $this->contents->find($command->tenantId, $command->identity);
         if ($stored instanceof ReturnContent) {
             return $stored;
+        }
+        if ($tracked->downloadState() === DownloadState::Downloaded) {
+            // Downloaded once, the document was purged since (retention of the host): nothing to ask URSSAF, and the
+            // state `downloaded` is not left.
+            throw ReturnNoLongerAvailable::forReturn($tracked->reference());
         }
 
         $content = $this->fetch($tracked);
