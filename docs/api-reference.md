@@ -401,55 +401,104 @@ checked at registration and at authentication.
 
 ## 4. Package decisions derived from the specification
 
-1. **No OAuth2.** The Tiers de prestations `OAuth2TokenProvider` is not reusable. A `DpaeTokenProvider` posts the XML
-   `identifiants` and treats the base-64 response as an opaque string. Cached in memory only (never persisted: it is
-   a credential); refreshed on a 401 whose `WWW-Authenticate` realm is `Expiration du jeton`. Token lifetime is not
-   published, so no proactive expiry. A 401 on authentication is mapped by realm (§1.3).
-2. **Hosts.** TBD (§5.1). Proposal: one configurable base URI per service (authentication, deposit, consultation,
-   download), defaults from the PDF table, with an option to switch to a single Swagger-style host plus base path.
-   `Infrastructure\Urssaf\Environment` (Sandbox `https://api-edi.urssaf.fr` / Production `https://api.urssaf.fr`)
-   and `UrssafEndpoints` (paths prefixed by `/authentifier_dpae`) in the skeleton follow the Swagger and the other
-   URSSAF packages and **must change**: the DPAE has no sandbox host and the PDF paths carry no base-path prefix.
-3. **Test vs real is a payload concern.** A `DeclarationMode` (`Test`|`Real`) value object drives the indicator
-   (§3.3) and the package never defaults silently to real: it is a required deposit option (default `Test` in the
-   Symfony bridge configuration, to be validated). Returns 20 and 41 are never expected in test mode.
-4. **Deposit input, TBD.** Phase 1: the application accepts an already generated DPAE flow (XML string/stream),
-   checks it is well-formed, gzips it (`ext-zlib`) and sends it; it does not build the flow. A domain model of the
-   declaration (employer, employee, contract) and an XML builder are a later phase, once the XML value vocabulary
-   and the *Dessin d'enregistrement DPAE* are available (§5).
-5. **Request headers for the deposit.** Follow the PDF example: `Authorization: DPAELogin jeton=…`,
-   `Content-Type: text/plain`, `Content-Encoding: gzip`; keep the content type overridable (Swagger declares none).
-   Always accept gzip responses or omit `Accept-Encoding` (406).
-6. **Deposit result is a sum type**: `ElectronicReceipt` (HTTP 200, AEE) or `RejectionNotice` (HTTP 422). Other
-   statuses raise typed exceptions (400, 401 by realm, 404, 406, 415). Parsing of the AEE/ARE body is TBD until a real
-   sample is captured (§5); until then the raw XML is kept next to the extracted `IdFluxDPAE`.
-7. **Unit deposit.** One flow per call; the package does not split or merge flows and does not send archives. No
-   local limit is enforced except an optional configurable maximum payload size (the official 100 Mo, §1.2).
-8. **Polling.** `ListReturns(from, ?to)` uses the one-date path when `to` is null and the two-date path otherwise;
-   dates formatted `yyyyMMddHHmmss`, time zone TBD (default `Europe/Paris`, to be confirmed). 422 and 429 on a list
-   call are both mapped to a `PollingConstraintViolated`-style exception carrying the Retry information when present.
-   The maximum range is not published, so no local range check.
-9. **Download.** Prefer the `url` of a `retour` when set (hosts then come from the API), otherwise build
-   `/telecharger-retour/1.0/{idFlux}/{idRetour}` on the download host. The result keeps the raw bytes and the
-   `Content-Type`; typed parsing per return nature (10, 11, 20, 41) is added per nature once samples exist.
-   Local checks: `idFlux` 1–50, `idRetour` 1–10.
-10. **Persistence (Doctrine bridge).** Returns are purged after 3 months and the consultation history is 13 months, so
-    the bridge stores deposits (`IdFluxDPAE`, declarant SIRET, mode, deposit time, outcome) and returns (flux id,
-    return id, nature, statut, publication, production, url, downloaded content) so that the application can
-    reconcile, detect new returns and keep them after purge.
-11. **Concentrators.** The configuration holds the authenticating identity (`siret`, `nom`, `prenom`, `motdepasse`,
-    `service`) and, for concentrators, the optional port `8443` on the three non-authentication hosts. The
-    `service` value is a typed enum for `98` (concentrator) and `25` (direct) with the Swagger example `97` accepted
-    as an unknown integer (TBD §5).
-12. **Secrets and personal data.** The password travels in clear in the XML body (TLS only) and is never logged or
+Every decision below is recorded in an accepted ADR of [docs/adr/](adr/) (2026-11-22), which holds the details and the
+section references; this list is the summary.
+
+1. **No OAuth2** ([ADR 0001](adr/0001-xml-token-authentication.md)). `DpaeTokenProvider` posts the XML
+   `identifiants` (root `identifiants`, no namespace, Swagger property order, encoding configurable, default `UTF-8`)
+   and keeps the base-64 answer as an opaque `DpaeToken`, **in process memory only** (`InMemoryTokenStore`, no
+   persistent or shared store). No proactive expiry; a 401 `Expiration du jeton` drops the token, re-authenticates and
+   replays the call once; `Jeton manquant ou invalide` drops the token and throws. Every 401 is mapped by realm
+   (§1.3) to `AuthenticationFailure` (`PasswordExpired`, `InvalidCredentials`, `NotRegistered`, `TokenInvalid`,
+   `TokenExpired`, `Unknown`); credential refusals park the tenant's records in `invalid_credentials`. Local
+   credential checks are the Swagger lengths only (the accent-less name pattern is not applied, §5.4).
+2. **Hosts** ([ADR 0002](adr/0002-hosts-per-service.md)). `Environment` (and `Sandbox`) is removed. Four base URIs
+   (authentication `https://mon.urssaf.fr`, deposit `https://depot.dpae-edi.urssaf.fr`, consultation
+   `https://consultation.dpae-edi.urssaf.fr`, download `https://telechargement.dpae-edi.urssaf.fr`), each overridable
+   from configuration and `%env()%`, authentication included; a base URI may carry a path prefix, which keeps the
+   Swagger reading expressible without a dedicated switch. `UrssafEndpoints` loses the `/authentifier_dpae` prefix
+   (only the authentication path is `/authentifier_dpae`); the deposit path is `/deposer-dsn/1.0` (Swagger). Port
+   `concentrator_port` (default `8443`) is added to the **default** deposit, consultation and download URIs for a
+   `98` identity, never to an overridden URI nor to authentication. The `url` of a `retour` is honoured **only if its
+   origin (scheme, host, effective port) equals the configured download origin**; otherwise the download is rebuilt
+   from `idFlux` / `idRetour`, or fails with `ReturnNotDownloadable` without `retour.id`. Redirects are never
+   followed.
+3. **Test vs real is a payload concern** ([ADR 0003](adr/0003-declaration-mode-and-simulator-guard.md)).
+   `DeclarationMode` (`Test` | `Real`) is the package's notion of "production". The installation mode
+   `declaration_mode` (default `test`, never `real` by default) caps the required per-deposit mode (`Real` deposit in a
+   `test` installation → `declaration_mode.not_allowed`). Indicator values are configurable (defaults `Real` → `120`,
+   `Test` → `TST`, inferred §3.3). A raw XML flow whose `FR_DUE_Upload.Test.Indicator` does not match the deposit mode
+   is refused, never rewritten; flat flows are not accepted in this version (layout not provided). The simulator is
+   refused with `real`: `SimulatedGatewayFactory` (runtime, resolved value), build-time literal check,
+   `withGateway()` of the standalone builder, and `SimulatedDpaeGateway` itself. Returns 20 and 41 are never expected
+   in test mode.
+4. **Declaration model** ([ADR 0007](adr/0007-declaration-model.md)). Scope of the first version: **phase 1 + the
+   declaration model**. Two inputs reach the same `DepositDpae`: a raw XML flow (`DpaeFlow::fromXml`, checked for
+   well-formedness, no DOCTYPE, root `FR_DUE_Upload`, mode indicator; deposited verbatim) and a `Declaration` (one
+   `Employer`, one `Employee`, one `Contract`) written by `DeclarationXmlWriter` in ISO-8859-1. The model holds only
+   the elements of the official example (§2.2), validated with the §3.4 rules that need no unpublished table or
+   algorithm (violation parameter `normCode`). Not modelled (no element published): raison sociale 1 and 2, address 2,
+   trial period. NIR (length 13 or 15) and `Sex.Code` are optional, as in §3.4. Not checked locally: table
+   memberships (`02`, `03`, `50`), NIR characters, consistency and key (`38`). The
+   unpublished vocabulary is configurable (`ContractType` → `CDD` / `CDI` / `CTT` by default, `1` / `2` / `3` by
+   configuration; employee name pattern default `A-Z' .&-`); `Sex.Code`, URSSAF code, health service and birth
+   department stay raw strings.
+5. **Request headers and encoding** ([ADR 0004](adr/0004-xml-gzip-client.md)). Deposit: `Authorization: DPAELogin
+   jeton=…`, `Content-Type: text/plain` (configurable), `Content-Encoding: gzip`, body `gzencode()` of the unchanged
+   flow bytes. Every request sends `Accept-Encoding: gzip`; a still-gzipped answer is decoded by the client, capped at
+   `max_response_bytes` (package default against decompression bombs).
+6. **Deposit result is a sum type** ([ADR 0005](adr/0005-deposit-result-and-unknown-outcome.md)):
+   `ElectronicReceipt` (200) | `RejectionNotice` (422 with an XML body), each with nullable `FlowId`, declarant SIRET
+   and generation date extracted from the Swagger `envoi` names, and the raw document kept. 400 and 404 / 406 / 415 /
+   3xx → `failed` (not processed, not retried); transport error, timeout, 5xx, unreadable 200, non-XML 422 →
+   `OutcomeUnknown` (`outcome_unknown`).
+7. **Unit deposit and size** ([ADR 0004](adr/0004-xml-gzip-client.md), [ADR 0005](adr/0005-deposit-result-and-unknown-outcome.md)).
+   One flow per call; no split, merge or archive. Optional `max_flow_bytes` (default 100 000 000, the FAQ's 100 Mo)
+   checked on the uncompressed flow. `DepositDpae` carries the host's `ExternalReference`; the `DpaeFlow` carries its
+   required `DeclarationMode`. `(tenant, external reference)` and `(tenant, FlowFingerprint)` (SHA-256 of the
+   uncompressed flow) are unique among open deposits: a repeated call returns the open deposit; a new deposit only once
+   the previous one is closed (`failed`, `rejected`, `not_received`). Failures that prove nothing was sent (token call,
+   `Jeton manquant ou invalide`, second `Expiration du jeton`) put the deposit back to `pending`.
+8. **Unknown outcome** ([ADR 0005](adr/0005-deposit-result-and-unknown-outcome.md)). Never resent blindly. Key:
+   declarant SIRET + flow fingerprint + publication window. The fingerprint identifies the local deposit only; the
+   candidates are the locally unknown `flux.id` with a nature `10` return published in `[claimedAt − skew, claimedAt
+   + window]`; the declarant SIRET (tenant SIRET for `25`, flow employer SIRET for `98`) filters them through the
+   downloaded `envoi_identification.declarant.siret`. Exactly one candidate is adopted, and only when no other deposit
+   of the tenant without a known flow id covers it; otherwise manual review, then `ResolveDepositOutcome`. Receipts
+   and rejection notices whose `IdFluxDPAE` could not be read get their flow id the same way.
+9. **Polling** ([ADR 0006](adr/0006-polling-constraints.md)). One-date path when `to` is null, two-date path
+   otherwise; `yyyyMMddHHmmss` (24-hour reading also for `publication` / `production`), zone `returns_time_zone`
+   (default `Europe/Paris`). 422 and 429 on lists → `PollingConstraintViolated` (`RetryableException`, delay from
+   `Retry-After` if any, else policy; status kept). No local range limit by default (`polling_max_range` null);
+   `SynchronizeReturns` keeps a dedicated per-tenant cursor (start of the last successful listing minus an overlap)
+   and upserts returns on `(tenant, flux.id, nature, ops)`, an absent `ops` stored as the empty string.
+10. **Download** ([ADR 0002](adr/0002-hosts-per-service.md), [ADR 0006](adr/0006-polling-constraints.md)). `url`
+    policy of decision 2; raw bytes + `Content-Type` kept, typed parsing per nature added once samples exist; local
+    checks `idFlux` 1–50, `idRetour` 1–10; 403 → `return.not_owned`, 404 → `ReturnNoLongerAvailable` (return marked
+    `purged`).
+11. **Persistence** ([ADR 0008](adr/0008-doctrine-persistence.md)). Doctrine stays optional. Tables
+    `urssaf_dpae_deposits`, `urssaf_dpae_deposit_flows` (only with `keep_flows: true`), `urssaf_dpae_returns`,
+    `urssaf_dpae_return_contents`, `urssaf_dpae_sync_cursors`, `urssaf_dpae_outbox`; DBAL types `urssaf_dpae_*`.
+    Returns and contents are kept beyond the URSSAF 3-month purge; the package sets no local retention period and
+    deletes nothing itself. Schema documented in `docs/doctrine.md`, **no migration shipped** (as the reference).
+12. **Concentrators** ([ADR 0001](adr/0001-xml-token-authentication.md), [ADR 0002](adr/0002-hosts-per-service.md)).
+    One tenant = one authenticating identity. `ServiceCode` keeps the raw integer next to `ServiceKind` (`Direct` `25`,
+    `Concentrator` `98`); `97` and other values are sent as is and get no concentrator port.
+13. **Secrets and personal data.** The password travels in clear in the XML body (TLS only) and is never logged or
     stored by the package; the consumer stores it encrypted (`CredentialsProvider`). NIR, names, birth data of the
-    flows and returns are personal data: never logged.
-13. **XML handling.** `ext-dom`/`ext-libxml`, `LIBXML_NONET`, no external entity loading, no DTD. Flows are exchanged
-    in ISO-8859-1 (example declaration): the builder and parsers must honour the declared encoding.
-14. **Error pages are not parsed.** HTML bodies of 401/404/422 are discarded; only status and `WWW-Authenticate`
-    are used.
-15. **Spec fidelity.** Swagger and PDFs are both reproduced; where they disagree the PDFs prevail for addresses and
-    the Swagger prevails for paths and field constraints, until the contract test (§5) settles each point.
+    flows and returns are personal data: never logged, masked by `__debugInfo`; the deposited flow is not stored by
+    default.
+14. **XML handling** ([ADR 0004](adr/0004-xml-gzip-client.md)). `SafeXmlReader`: `LIBXML_NONET` only, documents with
+    a DOCTYPE refused (answers and caller flows). Declared encoding honoured, then the `Content-Type` charset, then
+    UTF-8. Built flows in ISO-8859-1. Bodies of non-2xx answers are discarded unread (except the deposit 422); only
+    status, `WWW-Authenticate` and `Retry-After` are used.
+15. **Coexistence** ([ADR 0009](adr/0009-coexistence.md)). Commands `urssaf:dpae:*`, env variables `URSSAF_DPAE_*`,
+    Flex recipe in `recipe/`, prefixes `urssaf_dpae` for tables, DBAL types, locks, schedule, service ids, translation
+    domain and (reserved) cache keys, events `urssaf.dpae.*`, `InMemoryCredentialsProvider`, Symfony
+    `^6.4.3 || ^7.4 || ^8.0`.
+16. **Spec fidelity.** Swagger and PDFs are both reproduced; where they disagree the PDFs prevail for addresses and
+    the Swagger prevails for paths and field constraints, until the contract test (§5) settles each point. Every
+    value inferred rather than published is configurable and listed in §5.
 
 ---
 
@@ -458,34 +507,58 @@ checked at registration and at authentication.
 1. **Hosts.** Swagger: `api.urssaf.fr` + basePath `/authentifier_dpae` (so e.g. `/authentifier_dpae/deposer-dsn/1.0`).
    PDF: four dedicated hosts, no base path, port `8443` for concentrators; the Swagger's own 404 examples show paths
    without base path. To confirm which one is live, and whether `api.urssaf.fr` is a gateway to the same services.
+   Also: deposit path with or without the trailing slash of the PDF (`/deposer-dsn/1.0/`); origin of the real `url`
+   values of the returns (the package follows only the configured download origin, ADR 0002); whether the port `8443`
+   still applies. Handled by configuration (four overridable base URIs, `concentrator_port`).
 2. **Test mode.** Exact values and semantics of `FR_DUE_Upload.Test.Indicator` versus `C_VERSION` (`120`, `TST`);
-   whether a test deposit has side effects; no sandbox in the catalogue.
+   whether a test deposit has side effects; no sandbox in the catalogue. The package defaults `Real` → `120`,
+   `Test` → `TST` (configurable `test_indicator.*`, ADR 0003) and refuses flat flows because the position of
+   `C_VERSION` is not published.
 3. **Archives and multi-DPAE flows.** Swagger: unit deposit, one rank (S20 wording), archives refused. NAT/5491:
    archives (`gz`, `tar`, `zip`, `gzip`), multi-employer files, per-file pre-controls. NAT/5492: archives refused.
    FAQ: several hires for one establishment allowed, 100 Mo limit. To settle on the contract test.
 4. **Authentication XML.** Root element name, namespace, element order of `identifiants`: no XML example; also `service`
    documented as `98` / `25` while the example is `97`; the name patterns in the Swagger lost their accents
    (`eeeeaaauuuiioocEEEE…`), the real character classes are unknown; `nom`/`prenom` examples (`John`/`Doe`) look
-   swapped.
+   swapped. The XML encoding of the body is not published either: configurable `authentication_encoding`, default
+   `UTF-8` (ADR 0001). The pattern is not applied locally.
 5. **Content types.** Deposit request type (PDF `text/plain`, Swagger none, flow is XML `ISO-8859-1`); Swagger global
    `application/json` is unused; Swagger `Content-Type` header on authentication optional.
 6. **Token lifetime**, size and charset not published; re-authentication strategy is therefore reactive (§4.1).
 7. **Quotas** and maximum polling range not published (429 vs 422 transition, §1.1).
 8. **Date formats and time zone** of the list paths and of `publication` / `production`: `yyyyMMddHHmmss` for the
-   paths, `yyyyMMddhhmmss` (12-hour letters) for the fields in the Swagger; zone unknown.
+   paths, `yyyyMMddhhmmss` (12-hour letters) for the fields in the Swagger; zone unknown; whether `dateDebut` is
+   inclusive. The package reads both with a 24-hour clock in `returns_time_zone` (default `Europe/Paris`) and keeps
+   the raw strings (ADR 0006). The package defaults of the tunables that depend on these unknowns
+   (`pollingOverlap`, `reconciliationSkew`, `reconciliationWindow`, `staleDepositAfter`, `manualReviewAfter`,
+   `initialLookback`, `pollingRetryDelay`) are not specification values (ADR 0005, 0006).
 9. **Return bodies.** AEE, rejection notice, anomaly report, conformity certificates, BIS: formats referenced
    (`dsn_bilans_v01r06.xsd`, BIS v1.3, AR format 120, DSN guide V3.5) but **not provided**; no official example
    (the Swagger "Exemple succès (AEE)" / "Exemple avis de rejet" links are empty). The `envoi` schema is weakly
-   typed (`envoi_etat` typed as `retours`) and `url`/`id` wire names in XML are unknown.
+   typed (`envoi_etat` typed as `retours`) and `url`/`id` wire names in XML are unknown. Also unknown: which SIRET the
+   AEE triplet carries for a concentrator (the package expects the flow's employer SIRET, ADR 0005), and whether the
+   `statut` of a nature `10` return is `OK` for an AEE and `KO` for a rejection notice (inferred, used only by the
+   reconciliation).
 10. **`nature` values.** Swagger example `50` versus documented `10`, `11`, `20`, `41`; labels of `ANO`, `EN_COURS`.
 11. **Swagger text copied from the DSN.** The list operations describe *fiches de paramétrage* and `<declarant>`; the
     "S20" and `S21.G00.70.002` rubrics are DSN vocabulary. `dateFin` declared required but described as optional.
 12. **XML value vocabulary** of the DPAE flow (`FR_Contract.Nature.Code`: example `CDI` versus norm codes `1`/`2`/`3`;
     `Sex.Code`, `FR_Employer.URSSAF.Code`, health service codes): the flow format (*Dessin d'enregistrement DPAE*) is
-    not provided; the flat format (990 characters) layout is not provided either.
+    not provided; the flat format (990 characters) layout is not provided either. Consequences for the declaration
+   model (ADR 0007): raison sociale 1 is mandatory under §3.4 (code `05`) but has no element in the example, nor do
+   raison sociale 2, address 2 and the trial period, so the builder cannot write them; whether a built flow without
+   raison sociale is accepted must be checked by a test-mode deposit before real use. The example's first name
+   `Alain` breaks the §3.4 set `A-Z' .&-` (pattern configurable). Contract-type wire values default to `CDD` / `CDI` /
+   `CTT` (only `CDI` is attested), configurable to `1` / `2` / `3`.
 13. **Registration.** Catalogue: restricted access with a subscription form; FAQ: no specific registration for a
     company or third-party declarant, only for concentrators (by e-mail). To confirm what a package user must obtain.
-14. **Error payload** for 400 (deposit) is undocumented; only the HTML pages are shown.
+14. **Error payload** for 400 (deposit) is undocumented; only the HTML pages are shown. The package reads a 400 as
+    "not processed" (`failed`, never retried automatically, ADR 0005); whether URSSAF may still record the flow is
+    unknown.
 15. **Documentation date.** PDFs date from October 2021 while the guide revision history stops at V1.1 (2017) and
     NAT/5491 mentions a deployment "prévue à la fin du mois de septembre 2019": the documents may be outdated.
-16. **Maximum size** "paramétrable" (NAT/5491) versus 100 Mo (FAQ); compressed or not is unknown.
+16. **Maximum size** "paramétrable" (NAT/5491) versus 100 Mo (FAQ); compressed or not is unknown. The optional local
+    limit `max_flow_bytes` is checked on the uncompressed flow (ADR 0004).
+17. **List 422.** On the list operations 422 is both "paramètres invalides" (§2.3) and the temporary form of the
+    polling-constraint 429 (§1.1); the package maps both to the retryable `PollingConstraintViolated` and keeps the
+    status (ADR 0006). No `Retry-After` header is published.

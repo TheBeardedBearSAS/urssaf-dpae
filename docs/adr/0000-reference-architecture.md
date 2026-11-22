@@ -1,6 +1,6 @@
 # ADR 0000 — Reference architecture inherited from urssaf-tiers-prestations
 
-- Status: Proposed
+- Status: Accepted
 - Date: 2026-11-22
 
 ## Context
