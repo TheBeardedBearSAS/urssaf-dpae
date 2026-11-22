@@ -12,7 +12,9 @@ declare(strict_types=1);
 
 namespace TheBeardedBear\UrssafDpae\Tests\Unit\Infrastructure\Clock;
 
+use DateTimeImmutable;
 use PHPUnit\Framework\TestCase;
+use TheBeardedBear\UrssafDpae\Application\Port\Clock;
 use TheBeardedBear\UrssafDpae\Infrastructure\Clock\SystemClock;
 
 final class SystemClockTest extends TestCase
@@ -26,5 +28,12 @@ final class SystemClockTest extends TestCase
         static::assertSame('UTC', $now->getTimezone()->getName());
         static::assertGreaterThanOrEqual($before, $now->getTimestamp());
         static::assertLessThanOrEqual($after, $now->getTimestamp());
+    }
+
+    public function testItIsTheApplicationClockToo(): void
+    {
+        $port = static fn(Clock $clock): DateTimeImmutable => $clock->now();
+
+        static::assertSame('UTC', $port(new SystemClock())->getTimezone()->getName());
     }
 }

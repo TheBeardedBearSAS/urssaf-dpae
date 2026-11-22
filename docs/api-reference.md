@@ -472,7 +472,9 @@ section references; this list is the summary.
    + window]`; the declarant SIRET (tenant SIRET for `25`, flow employer SIRET for `98`) filters them through the
    downloaded `envoi_identification.declarant.siret`. Exactly one candidate is adopted, and only when no other deposit
    of the tenant without a known flow id covers it; otherwise manual review, then `ResolveDepositOutcome`. Receipts
-   and rejection notices whose `IdFluxDPAE` could not be read get their flow id the same way.
+   and rejection notices whose `IdFluxDPAE` could not be read get their flow id the same way. **Lot 5 does not
+   download the nature `10` document**, so the declarant SIRET is not compared (§5.23); the status (`OK` / `KO`) settles
+   an unknown outcome, any other status leaves it unknown.
 9. **Polling** ([ADR 0006](adr/0006-polling-constraints.md)). One-date path when `to` is null, two-date path
    otherwise; `yyyyMMddHHmmss` (24-hour reading also for `publication` / `production`), zone `returns_time_zone`
    (default `Europe/Paris`). 422 and 429 on lists → `PollingConstraintViolated` (`RetryableException`, delay from
@@ -506,6 +508,35 @@ section references; this list is the summary.
 16. **Spec fidelity.** Swagger and PDFs are both reproduced; where they disagree the PDFs prevail for addresses and
     the Swagger prevails for paths and field constraints, until the contract test (§5) settles each point. Every
     value inferred rather than published is configurable and listed in §5.
+17. **Application layer as implemented** (lot 5, amendments of [ADR 0003](adr/0003-declaration-mode-and-simulator-guard.md),
+    [0005](adr/0005-deposit-result-and-unknown-outcome.md), [0006](adr/0006-polling-constraints.md),
+    [0008](adr/0008-doctrine-persistence.md)). Handlers are `final readonly`, invoked with a command, and share a
+    `UnitOfWork` (transaction, integration events appended to the outbox inside it, domain events published after the
+    commit; a failing listener is reported, never undoes the work).
+    - `DepositDpaeHandler(DepositRepository, DpaeGateway, CredentialsProvider, Clock, IdGenerator, UnitOfWork, WorkflowPolicy, DeclarationMode $installationMode)`
+      `__invoke(DepositDpae): Deposit`. Checks the installation ceiling first (`declaration_mode.not_allowed`), records the
+      deposit in its own transaction (idempotence by reference and fingerprint, `deposit.reference_conflict`,
+      `deposit.flow_already_open`), claims it atomically (`DepositRepository::claim()`), and only the claimant calls the
+      gateway. A `pending` deposit found again is sent again by calling the handler with the same reference and flow (the
+      flow is not stored). Outcomes: receipt → `received`, rejection notice → `rejected`; `OutcomeUnknown`, a transport
+      error after the send and any `UrssafUnavailable::mayHaveReachedUrssaf()` → `outcome_unknown` (returned, never
+      resent); credential refusal → `invalid_credentials` (returned); 400 and any other `UrssafException` (404, 406, 415,
+      3xx) → `failed` (returned); a failure proving the flow was not sent (token refused after the replay, throttling,
+      local refusal) → `pending` again or `failed` at `maxDepositAttempts`, and **rethrown**; any other `Throwable` →
+      `outcome_unknown` and rethrown.
+    - `ListReturnsHandler(...)` `__invoke(ListReturns): list<ReturnReference>`, `DownloadReturnHandler(...)`
+      `__invoke(DownloadReturn): ReturnContent` (stored document first; 404 → `purged`, no document → `not_downloadable`,
+      both saved then rethrown), `SynchronizeReturnsHandler(...)` `__invoke(SynchronizeReturns): SynchronizationReport`
+      (a 422 / 429 is **reported** with `retryAfterSeconds` and `needsAttention`, not thrown, the cursor not moving),
+      `ReconcileUnknownDepositsHandler(...)` `__invoke(ReconcileUnknownDeposits): ReconciliationReport`.
+    - `Application\Port\Clock` is the application's own clock port (`SystemClock` implements it and PSR-20, `PsrClock`
+      adapts any PSR-20 clock): the Application layer depends on the Domain and the Contract only.
+    - The simulator is `Testing\SimulatedDpaeGateway`; `Bridge\Symfony\DependencyInjection\SimulatedGatewayFactory::create(string
+      $declarationMode, Clock, IdGenerator)` accepts only the exact value `test` (fail closed). The standalone entry point is
+      `Standalone\UrssafDpaeBuilder` (`withGateway()` refuses a `real` installation) producing `Standalone\UrssafDpae`.
+    - Not in lot 5 (kept in [roadmap.md](roadmap.md)): `DownloadDueReturns`, `ResolveDepositOutcome`,
+      `RequeueInvalidCredentials`, `GetWorkflowOverview`, outbox relay and purge, the Symfony and Doctrine bridges. The
+      domain transitions behind the first three exist (`Deposit::resolveAs*`, `requeue`).
 
 ---
 
@@ -538,7 +569,8 @@ section references; this list is the summary.
    inclusive. The package reads both with a 24-hour clock in `returns_time_zone` (default `Europe/Paris`) and keeps
    the raw strings (ADR 0006). The package defaults of the tunables that depend on these unknowns
    (`pollingOverlap`, `reconciliationSkew`, `reconciliationWindow`, `staleDepositAfter`, `manualReviewAfter`,
-   `initialLookback`, `pollingRetryDelay`) are not specification values (ADR 0005, 0006).
+   `initialLookback`, `pollingRetryDelay`) are not specification values (ADR 0005, 0006); `pollingOverlap` defaults to
+   `PT2H` (Paris is UTC+1 in winter, UTC+2 in summer) and `WorkflowPolicy` refuses non-positive durations and a negative skew.
 9. **Return bodies.** AEE, rejection notice, anomaly report, conformity certificates, BIS: formats referenced
    (`dsn_bilans_v01r06.xsd`, BIS v1.3, AR format 120, DSN guide V3.5) but **not provided**; no official example
    (the Swagger "Exemple succès (AEE)" / "Exemple avis de rejet" links are empty). The `envoi` schema is weakly
@@ -610,3 +642,10 @@ section references; this list is the summary.
     URSSAF hosts. `declaration_mode` (ceiling of the installation, default `test`, ADR 0003 amendment): a `real` flow with
     a `test` ceiling is refused before any call (`declaration_mode.not_allowed`). The PSR-18 client must not follow
     redirects (a 307 / 308 would resend the deposit); transport exceptions are never chained (class name only).
+23. **Reconciliation without the nature `10` document** (lot 5, [ADR 0005](adr/0005-deposit-result-and-unknown-outcome.md)
+    amendment). `ReconcileUnknownDepositsHandler` adopts a flux from the return list alone (sole nature `10` candidate in the
+    claim window, no competing deposit, status `OK` / `KO`); the declarant SIRET of the downloaded AEE is not compared,
+    because the `envoi` schema is unpublished (§5.9) and the Application layer has no reader for it. A flux that another
+    channel deposited in the same window would be adopted if it is the only one. For a concentrator the deposit does not
+    know its declarant SIRET (the flow's employer SIRET is not read), so the comparison could not be made anyway. To be
+    closed with the contract-test samples of the AEE.

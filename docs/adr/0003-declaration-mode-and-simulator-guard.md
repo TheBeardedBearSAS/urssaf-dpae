@@ -116,3 +116,19 @@ Replaces the "raw XML flows" bullet and the factory signature of the "mode in th
   `installation_mode`). A `Test` flow is allowed whatever the ceiling.
 - This is the lowest layer that can enforce the rule: the application layer ([ADR 0007](0007-declaration-model.md)) may
   refuse earlier, but a gateway built directly with `UrssafGatewayFactory` is guarded as well.
+
+## Amendment 2026-11-22 — the guards as implemented (lot 5)
+
+- `DepositDpaeHandler` checks the installation ceiling (`DeclarationMode::allows()`) **before** recording or claiming
+  anything (`declaration_mode.not_allowed`, parameters `mode`, `installation_mode`); the gateway keeps its own check, so
+  both entry points are guarded.
+- `SimulatedGatewayFactory::create(string $declarationMode, Clock $clock, IdGenerator $ids): SimulatedDpaeGateway` lives
+  in `Bridge\Symfony\DependencyInjection` (it imports nothing from Symfony). It **fails closed**: only the exact value `test`
+  builds the simulator; `real`, an unresolved `%env()%` placeholder, an empty or differently cased value throw
+  `LogicException`. There is no production host to refuse: "production" is `real` (§"The mode").
+- `UrssafDpaeBuilder::withGateway()` refuses any gateway when the `ApiConfiguration` ceiling is `real`, whichever gateway it
+  is (PAJE / TDAE model); the HTTP gateway built by the builder itself stays allowed.
+- `SimulatedDpaeGateway` refuses a `Real` flow with a `LogicException` first of all (before the call is journaled, a scripted
+  failure is consumed or the flux is recorded), never produces the returns
+  `20` / `41` (it only lists nature `10`), and can script a failure per operation, a rejection notice and a lost answer
+  (the flux is then recorded but `OutcomeUnknown` is thrown, which is what the reconciliation looks for).

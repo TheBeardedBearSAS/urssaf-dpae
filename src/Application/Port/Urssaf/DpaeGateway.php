@@ -32,7 +32,15 @@ interface DpaeGateway
     /**
      * Deposits one flow, as is. 200 is an electronic receipt, 422 with an XML body is a rejection notice.
      *
-     * A deposit is never resent by the package once it may have reached URSSAF.
+     * A deposit is never resent by the package once it may have reached URSSAF. The use case reads what an adapter throws
+     * as follows (`SendFailure`), so an adapter must keep to this contract:
+     *
+     * - provably not sent, retried later: `UrssafUnavailable` without `mayHaveReachedUrssaf()`, a non-credential
+     *   `UrssafAuthenticationFailed`, `PollingConstraintViolated`, and the local refusals `InvalidValue` `flow.too_large` and
+     *   `InvariantViolation` `declaration_mode.not_allowed` (any other `DomainException` is an unknown outcome);
+     * - credentials refused: `UrssafAuthenticationFailed` for a credential refusal (the deposit is parked);
+     * - answered without processing, closed: any other `UrssafException` (`UrssafRequestRejected`, an unexpected status);
+     * - everything else, including `OutcomeUnknown` and any other `Throwable`, is an unknown outcome: reconcile, never resend.
      *
      * @throws OutcomeUnknown            the flow may have been received (transport error, 5xx, unreadable answer): reconcile, never resend blindly
      * @throws UrssafRequestRejected     HTTP 400 (`deposit.bad_request`): not processed

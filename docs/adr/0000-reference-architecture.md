@@ -106,7 +106,7 @@ adaptation gets its own ADR, listed at the end.
 | Unknown outcome of a write | Adapted | No idempotency key on the deposit; a lost answer is reconciled from the return lists, never resent blindly. The reconciliation key is to be defined in ADR 0005 (it cannot be `IdFluxDPAE`, which is carried by the lost AEE). |
 | Polling, quotas, rate limiter | Adapted | No published quota; 422 and 429 on lists are both a polling-constraint `RetryableException`; no local range check. ADR 0006. |
 | Business payload modelling | Adapted | Declaration model and XML builder limited to the elements of the single official example plus the norm controls of §3.4. ADR 0007. |
-| Events and outbox | Applies | Deposit recorded, receipt / rejection obtained, new return available, return downloaded; catalogue prefixed `urssaf.dpae.*`. |
+| Events and outbox | Applies | Deposit received / rejected / outcome unknown / failed / parked (`invalid_credentials`) / adopted by reconciliation, new return available, return downloaded; catalogue prefixed `urssaf.dpae.*` (ADR 0005 amendment). |
 | Multi-tenant | Applies | A tenant is one authenticating identity (direct declarant or concentrator); for a concentrator, the declarant SIRET is carried by the flow. |
 | Idempotence, claim, attempts | Applies | Claim before each deposit; uniqueness per tenant on the host reference and on `IdFluxDPAE`. |
 | Doctrine bridge | Adapted | Required for the full lifecycle but still an optional Composer dependency (`require-dev` + `suggest`): deposits, returns and downloaded contents are kept beyond the 3-month purge. Whether a migration is shipped (the reference ships none) is decided in ADR 0008. |
@@ -154,3 +154,19 @@ adaptation gets its own ADR, listed at the end.
   claims, outbox and migration policy.
 - **0009 — Coexistence:** distinct prefixes and identifiers so that this package runs side by side with the other
   URSSAF packages in one application and database.
+
+## Amendment 2026-11-22 — the application layer (lot 5)
+
+- **Layers.** `deptrac.yaml` now has the `Contract`, `Testing` and `Standalone` layers with the rules of "Inherited
+  principles" §1 (`Application` → Domain, Contract only; `Testing` → Domain, Contract, Application, Infrastructure;
+  `Standalone` → Domain, Contract, Application, Infrastructure, DoctrineBridge, Doctrine, Psr; `SymfonyBridge` also →
+  Testing). The application layer does not depend on `psr/clock`: it owns `Application\Port\Clock`, which
+  `Infrastructure\Clock\SystemClock` implements together with PSR-20, and `PsrClock` adapts any PSR-20 clock.
+- **Events.** As in the reference: aggregates record domain events (`Domain\Shared\DomainEvent`), `UnitOfWork` appends the
+  translated integration events (`Contract\Event\*`, scalar, ids derived from the fact, so that a duplicate is
+  detectable) to the outbox inside the transaction and publishes the domain events after the commit; a failing listener is
+  handed to a `FailureReporter` and never undoes the work. Integration events carry identifiers and codes only (never a
+  document, a reject reason or a name).
+- **Ports** (`Application\Port`): `DepositRepository`, `ReturnRepository`, `SyncCursorRepository`, `ReturnContentStore`,
+  `TransactionManager`, `Outbox`, `EventPublisher`, `FailureReporter`, `IdGenerator`, `Clock`. `WorkflowPolicy` has no
+  defaulted constructor argument: `WorkflowPolicy::defaults()` or an explicit constructor call.

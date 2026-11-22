@@ -9,6 +9,21 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ### Added
 
+- Application layer (lot 5, ADR 0003, 0005, 0006, 0008): `Domain\Deposit\{Deposit, DepositId, DepositState, ExternalReference}`
+  (the ADR 0005 lifecycle), `Domain\Return\{TrackedReturn, DownloadState, SyncCursor}`, domain events and the public
+  integration events `Contract\Event\*` (`urssaf.dpae.*`, codec); the handlers `DepositDpae` (idempotent per tenant by
+  reference and flow fingerprint, atomic claim before the send, unknown outcome never resent), `ListReturns`,
+  `DownloadReturn`, `SynchronizeReturns` (per-tenant cursor, polling refusals reported) and `ReconcileUnknownDeposits`;
+  the ports `DepositRepository`, `ReturnRepository`, `SyncCursorRepository`, `ReturnContentStore`, `TransactionManager`,
+  `Outbox`, `EventPublisher`, `FailureReporter`, `IdGenerator`, `Clock`, `WorkflowPolicy` and `UnitOfWork`; their in-memory
+  adapters; `Testing\SimulatedDpaeGateway` and `Bridge\Symfony\DependencyInjection\SimulatedGatewayFactory` (test mode only);
+  and the standalone entry point `Standalone\UrssafDpaeBuilder` / `UrssafDpae`. `deptrac.yaml` gains the `Contract`,
+  `Testing` and `Standalone` layers. The reconciliation does not download the AEE yet (api-reference.md §5.23).
+  Deposits are saved under an optimistic version (`deposit.concurrent_modification`; sweep, adoption and late answers reload and
+  decide again); the reconciliation adopts only once a window is closed and the policy allows it (`WorkflowPolicy::autoAdopt`),
+  marks adoptions (`urssaf.dpae.deposit.adopted`), caps its listing to 13 months and `now`, reports refusals and unattached flux;
+  `urssaf.dpae.deposit.failed` and `.parked` are published.
+
 - Project skeleton: Docker tooling, quality gates (`make ci`) and GitHub Actions CI, identical to the other URSSAF
   packages.
 - Specification: official OpenAPI contracts (`docs/openapi/`), official documentation (links in `docs/api-reference.md`, local copy in the git-ignored `docs/reference/`), technical

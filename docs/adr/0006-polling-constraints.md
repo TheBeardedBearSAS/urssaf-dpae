@@ -69,7 +69,9 @@
 - A host that learns the real range limit sets `polling_max_range`; until then the one-date path is used.
 - The 24-hour reading and the time zone are open points (§5.8) checked by the contract tests; a zone error smaller
   than `pollingOverlap()` loses no return. The defaults of the polling tunables are package defaults, not
-  specification values.
+  specification values. The default overlap is `PT2H`: the zone of `publication` is unpublished, and Paris is UTC+1 in
+  winter and UTC+2 in summer, so an overlap under `PT1H` loses returns when a zone error meets the winter offset (a host
+  that knows the zone may lower it, never below `PT1H`).
 
 ## Amendment 2026-11-22 — tolerance of `WireDate`
 
@@ -88,3 +90,23 @@ string (`publication` / `production` stay available raw on `ReturnReference`). T
 - `PollingConstraintViolated::withStatus(int $status, ?int $retryAfterSeconds)`: the delay is `Retry-After` (seconds or
   HTTP date) or null, and the caller applies `WorkflowPolicy::pollingRetryDelay()`. A 5xx on a list or a download is an
   `UrssafUnavailable` (`mayHaveReachedUrssaf()` true, harmless for reads).
+
+## Amendment 2026-11-22 — the synchronisation as implemented (lot 5)
+
+- **Refusals are reported.** `SynchronizeReturnsHandler` returns a `SynchronizationReport` (`discovered`, `windows`,
+  `refused`, `needsAttention`, `retryAfterSeconds`); a 422 / 429 does not throw. The cursor stays, its consecutive refusal
+  count grows (`SyncCursor::refused()`), `needsAttention` is true from `maxPollingConstraintRetries` refusals, and the retry
+  delay is `Retry-After` or `pollingRetryDelaySeconds`. A success resets the count. Any other failure (`UrssafUnavailable`,
+  credentials) propagates and touches neither cursor nor count.
+- **Origin.** `cursor`, else `start − initialLookback`; never before `start − 13 months` (`WorkflowPolicy::MAX_LOOKBACK`,
+  also applied to a stale cursor) and never after `start`. The new cursor is `start − pollingOverlap`. With
+  `pollingMaxRange`, consecutive windows `[from, min(from + range, start)]`; no window when the origin is the start.
+- **Identity.** `ReturnRepository` is keyed by `(tenant, flux.id, nature, ops)` where an absent `ops` (null) differs from an
+  empty one at the port; a storage that cannot hold a null maps it (the empty string of "Decision"). Returns are ingested by
+  `ReturnIngestion` (shared with `ListReturns` and the reconciliation), which links each one to the local deposit with the
+  same `flux.id`, before the refresh, so that the events carry the link.
+- **Download.** `DownloadReturnHandler` returns a stored document without calling URSSAF; 404 marks `purged`, a return
+  without a usable document `not_downloadable`. Both marks are idempotent (asking again for a purged return rethrows the
+  gateway's refusal, it never fails on the state), a `not_downloadable` return may still be purged, a return that gains a
+  document goes back to `pending`, and a successful download makes any `pending` / `not_downloadable` return `downloaded`.
+  `DownloadDueReturns` and the `downloadRetention` tunable are not shipped yet.

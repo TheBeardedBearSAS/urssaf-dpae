@@ -15,11 +15,12 @@ namespace TheBeardedBear\UrssafDpae\Infrastructure\Clock;
 use DateTimeImmutable;
 use DateTimeZone;
 use Psr\Clock\ClockInterface;
+use TheBeardedBear\UrssafDpae\Application\Port\Clock;
 
 /**
- * The system clock, in UTC.
+ * The system clock, in UTC: a PSR-20 clock for the HTTP gateway and the application's {@see Clock} port.
  */
-final readonly class SystemClock implements ClockInterface
+final readonly class SystemClock implements Clock, ClockInterface
 {
     public function now(): DateTimeImmutable
     {

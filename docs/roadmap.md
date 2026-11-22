@@ -17,8 +17,17 @@ the first version covers **phase 1 (raw-flow deposit) + the declaration model** 
   deleted (no sandbox host; "production" is `DeclarationMode::Real`,
   [ADR 0003](adr/0003-declaration-mode-and-simulator-guard.md)) ([ADR 0002](adr/0002-hosts-per-service.md)).
 - Lot 4 (HTTP gateway) is implemented: see "Application" and "Infrastructure" below. The ports are tenant-scoped, so
-  `Domain\Tenant\TenantId` was added with it; the rest of lot 5 (`ExternalReference`, `Deposit`, `DepositState`,
-  `DownloadState`) is still to do.
+  `Domain\Tenant\TenantId` was added with it.
+- Lot 5 (application layer) is implemented: `Deposit\{Deposit, DepositId, DepositState, ExternalReference}`,
+  `Return\{TrackedReturn, DownloadState, SyncCursor}`, domain and integration events, the ports and `WorkflowPolicy`,
+  `UnitOfWork`, the handlers `DepositDpae`, `ListReturns`, `DownloadReturn`, `SynchronizeReturns`,
+  `ReconcileUnknownDeposits`, the in-memory adapters, `Testing\SimulatedDpaeGateway`, the plain
+  `Bridge\Symfony\DependencyInjection\SimulatedGatewayFactory` class (unit-tested; its container wiring and the functional
+  test modelled on the CESU package are lot 6) and the standalone `UrssafDpaeBuilder`; the Deptrac layers `Contract`, `Testing` and `Standalone` are in `deptrac.yaml`. **Deferred
+  to later lots:** `DownloadDueReturns` (and the `downloadRetention` tunable), `ResolveDepositOutcome`,
+  `RequeueInvalidCredentials`, `GetWorkflowOverview` / `WorkflowStatistics`, `RelayOutbox` / `PurgeOutbox` (and the
+  `IntegrationEventSink` port), the Symfony and Doctrine bridges, and the nature `10` document check of the reconciliation
+  ([ADR 0005](adr/0005-deposit-result-and-unknown-outcome.md) amendment, api-reference.md §5.23).
 
 ## Domain (`src/Domain`)
 
@@ -50,7 +59,7 @@ Split into lots; each lot is merged green (100 % coverage, MSI 100 %).
   validated with the section 3.4 rules of [ADR 0007](adr/0007-declaration-model.md) (notification pattern, `normCode`
   parameter).
 
-### Lot 5 — Application (domain parts)
+### Lot 5 — Application (domain parts) — done
 
 - (`Tenant\TenantId` exists since lot 4, [ADR 0001](adr/0001-xml-token-authentication.md).) `Deposit\ExternalReference` (the host's
   identifier of the hire), the `Deposit\Deposit` aggregate with `DepositState` (`pending`, `depositing`, `received`,
@@ -95,7 +104,8 @@ Split into lots; each lot is merged green (100 % coverage, MSI 100 %).
 ## Bridges
 
 - Symfony bundle `UrssafDpaeBundle` (alias `urssaf_dpae`): configuration validated at build time, HTTP client with
-  `max_redirects: 0`, `SimulatedGatewayFactory` (refuses the resolved `real` mode), console commands `urssaf:dpae:*`
+  `max_redirects: 0`, the container wiring of `SimulatedGatewayFactory` (refuses the resolved `real` mode; the class itself
+  ships in lot 5) with its functional test modelled on the CESU package, console commands `urssaf:dpae:*`
   (`check`, `status`, `deposit <file> --mode`, `sync-returns`, `download-returns`, `reconcile`, `resolve`, `requeue`,
   `relay-outbox`), Messenger, locks and Scheduler prefixed `urssaf_dpae`, en / fr translations, Flex recipe in
   `recipe/` ([ADR 0009](adr/0009-coexistence.md)).
@@ -128,11 +138,11 @@ the API itself. Symfony components in `require-dev` `^6.4.3 || ^7.4 || ^8.0`, Sy
 
 ## Order of work
 
-1. Replace `Environment` / `UrssafEndpoints` (ADR 0002, done in lot 4) and complete `deptrac.yaml` (Contract, Testing, Standalone).
+1. Replace `Environment` / `UrssafEndpoints` (ADR 0002, done in lot 4) and complete `deptrac.yaml` (Contract, Testing, Standalone; done in lot 5).
 2. Domain: lot 1 (value objects, sum types, exceptions), then lot 2 (declaration model and its validation).
 3. Wire writers/readers + fixtures (`SafeXmlReader`, identifiants, envoi, retours, declaration writer).
 4. HTTP gateway (authentication, deposit, lists, download, status mapping, 422 / 429).
-5. Application commands/queries (deposit, synchronisation, download, reconciliation).
+5. Application commands/queries (deposit, synchronisation, download, reconciliation; the five main ones are done in lot 5, see "Already in place" for the rest).
 6. Symfony bridge and Flex recipe.
 7. Doctrine bridge.
 8. Contract tests, then remove the settled open points from `api-reference.md` §5 and amend the ADRs concerned.
