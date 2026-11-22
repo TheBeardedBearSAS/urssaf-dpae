@@ -108,7 +108,7 @@ Body (`application/xml`, required): `identifiants`, all five fields required.
 
 | Field | Type | Req. | Rules |
 |---|---|---|---|
-| `siret` | string | yes | Declarant SIRET, or concentrator SIRET (SIRET of the establishment that signed the concentrator charter). Exactly 14 characters (`minLength`/`maxLength` 14). Example `84080764800018` |
+| `siret` | string | yes | Declarant SIRET, or concentrator SIRET (SIRET of the establishment that signed the concentrator charter). Exactly 14 characters (`minLength`/`maxLength` 14). Example `84080764800018` (example of the official Swagger) |
 | `nom` | string | yes | Declarant name or concentrator company name. 1–64 chars, pattern `^([a-zA-ZeeeeaaauuuiioocEEEEAAAUUUIIOOC]+['\- ])*[a-zA-ZeeeeaaauuuiioocEEEEAAAUUUIIOOC]+$` (accented letters are flattened in the published Swagger; see §5). Example `John` |
 | `prenom` | string | yes | First name of the declarant or concentrator subscriber. 1–39 chars, same pattern. Example `Doe` |
 | `motdepasse` | string | yes | Password. 8–30 chars. "Le mot de passe est transmis en clair à chaque authentification. Par contre celui-ci doit être chiffré s'il est stocké dans un logiciel de paie." |
@@ -535,12 +535,26 @@ section references; this list is the summary.
       $declarationMode, Clock, IdGenerator)` accepts only the exact value `test` (fail closed). The standalone entry point is
       `Standalone\UrssafDpaeBuilder` (`withGateway()` refuses a `real` installation) producing `Standalone\UrssafDpae`.
     - Not in lot 5 (kept in [roadmap.md](roadmap.md)): `DownloadDueReturns`, `ResolveDepositOutcome`,
-      `RequeueInvalidCredentials`, `GetWorkflowOverview`, outbox relay and purge, the Symfony and Doctrine bridges. The
-      domain transitions behind the first three exist (`Deposit::resolveAs*`, `requeue`).
+      `RequeueInvalidCredentials`, `GetWorkflowOverview`. The domain transitions behind the first three exist
+      (`Deposit::resolveAs*`, `requeue`). The outbox relay and purge and the Symfony and Doctrine bridges were delivered
+      later (lots 6 and 7, items 24 and 25 of §5).
+18. **Workflow, tests and benchmarks** (lot 8, [workflow.md](workflow.md), [testing.md](testing.md)). The state machines,
+    idempotence, retry, reconciliation, outbox and polling rules above are described in `workflow.md`. The contract
+    suite (`tests/Contract`) is skipped without the `URSSAF_DPAE_*` credentials, is **always in test mode** (installation
+    ceiling `Test`, test indicator on every flow) and writes only with `URSSAF_DPAE_CONTRACT_DEPOSIT=1`; its answers are
+    kept as local samples (`var/contract-samples`, git-ignored) to settle the points of §5 that only URSSAF can answer.
+    Benchmarks (PHPBench, `tests/Benchmark`) cover the declaration validation, the flow encoding with gzip and the
+    decoding of the answers. None of this changes a specification value: every point of §5 stays open, and configurable,
+    until a contract run settles it.
 
 ---
 
 ## 5. Open points
+
+Points the published documents do not settle. Each has a configurable package default (§4) and a test of
+`tests/Contract` that settles it once the suite has run with the credentials of a subscriber (hosts 1, test mode 2,
+authentication XML 4, date formats 8, return bodies 9, raison sociale 12); until then they stay open. The points that
+are decided by the package rather than by URSSAF are in §4.
 
 1. **Hosts.** Swagger: `api.urssaf.fr` + basePath `/authentifier_dpae` (so e.g. `/authentifier_dpae/deposer-dsn/1.0`).
    PDF: four dedicated hosts, no base path, port `8443` for concentrators; the Swagger's own 404 examples show paths
@@ -667,3 +681,7 @@ section references; this list is the summary.
     `ResolveDepositOutcome`, `RequeueInvalidCredentials`, `GetWorkflowOverview` (so no `status`, `resolve`, `requeue`,
     `download-returns` command). Symfony 8 is exercised in CI (PHP 8.4, Symfony 8.1, DoctrineBundle 3.4: unit and functional suites,
     ADR 0009); the static analysis and the QA tools stay on the locked PHP 8.2 dependencies, as some pin `symfony/console` below 8.
+26. **Contract run pending** (lot 8). `tests/Contract` and its sample recorder are delivered but have not been run against
+    the live hosts: no value of this section was observed. After a run, remove the points it settles from this list, replace
+    the fictitious `envoi_*.xml` and `retours_*.xml` fixtures with anonymised captures, and amend the ADRs concerned
+    (0001, 0002, 0003, 0004, 0005, 0006).

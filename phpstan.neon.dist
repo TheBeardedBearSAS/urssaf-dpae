@@ -1,5 +1,12 @@
+# This file is part of thebeardedbear/urssaf-dpae.
+#
+# Copyright (c) TheBeardedBear and the urssaf-dpae contributors
+#
+# SPDX-License-Identifier: MIT
+
 includes:
     - vendor/phpstan/phpstan/conf/bleedingEdge.neon
+    - phpstan-constants.php
     # phpstan-strict-rules, -deprecation-rules, -phpunit, -symfony, -doctrine,
     # shipmonk/phpstan-rules, ergebnis/phpstan-rules and tomasvotruba/type-coverage
     # are registered automatically by phpstan/extension-installer.
@@ -23,7 +30,6 @@ parameters:
         return: 100
         param: 100
         property: 100
-        constant: 100
 
     ergebnis:
         # AbstractBundle::loadExtension/prependExtension and CompilerPassInterface::process impose ContainerBuilder parameters.

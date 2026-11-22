@@ -46,8 +46,8 @@ test-unit: ## Run unit tests
 test-functional: ## Run functional tests
 	$(PHP) vendor/bin/phpunit --testsuite=functional
 
-test-contract: ## Run live contract tests (needs URSSAF_DPAE_SIRET/NOM/PRENOM/PASSWORD/SERVICE; optional host overrides URSSAF_DPAE_*_URI)
-	docker compose run --rm -e URSSAF_DPAE_SIRET -e URSSAF_DPAE_NOM -e URSSAF_DPAE_PRENOM -e URSSAF_DPAE_PASSWORD -e URSSAF_DPAE_SERVICE -e URSSAF_DPAE_AUTHENTICATION_URI -e URSSAF_DPAE_DEPOSIT_URI -e URSSAF_DPAE_CONSULTATION_URI -e URSSAF_DPAE_DOWNLOAD_URI php vendor/bin/phpunit --testsuite=contract
+test-contract: ## Run live contract tests (needs URSSAF_DPAE_SIRET/NOM/PRENOM/PASSWORD/SERVICE; optional host overrides URSSAF_DPAE_*_URI; URSSAF_DPAE_CONTRACT_DEPOSIT=1 allows the test-mode deposit)
+	docker compose run --rm -e URSSAF_DPAE_SIRET -e URSSAF_DPAE_NOM -e URSSAF_DPAE_PRENOM -e URSSAF_DPAE_PASSWORD -e URSSAF_DPAE_SERVICE -e URSSAF_DPAE_AUTHENTICATION_URI -e URSSAF_DPAE_DEPOSIT_URI -e URSSAF_DPAE_CONSULTATION_URI -e URSSAF_DPAE_DOWNLOAD_URI -e URSSAF_DPAE_CONTRACT_DEPOSIT php vendor/bin/phpunit --testsuite=contract
 
 coverage: ## Coverage (pcov): text + clover + html in var/coverage, enforce 100% lines/methods/classes
 	$(PHP) vendor/bin/phpunit $(UNIT_FUNCTIONAL) --coverage-text --coverage-clover var/coverage/clover.xml --coverage-html var/coverage/html --coverage-xml var/coverage/coverage-xml --log-junit var/coverage/junit.xml

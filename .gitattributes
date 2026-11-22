@@ -30,3 +30,4 @@
 /tools export-ignore
 /sonar-project.properties export-ignore
 /.hadolint.yaml export-ignore
+/phpstan-constants.php export-ignore

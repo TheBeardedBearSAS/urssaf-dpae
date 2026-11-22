@@ -262,7 +262,7 @@ jobs:
 
   # PHPBench (tools/phpbench, out of the package dependencies). On a pull request, the benchmarks of the branch also run
   # against the base commit in the same job, and the job fails on a regression of more than 20 %. Every step is skipped
-  # until tests/Benchmark holds a benchmark.
+  # when tests/Benchmark holds no *Bench.php file.
   benchmark:
     name: benchmark
     runs-on: ubuntu-latest
@@ -316,7 +316,8 @@ jobs:
   # Manual only: Actions > CI > Run workflow > "contract". Repository secrets URSSAF_DPAE_SIRET, URSSAF_DPAE_NOM,
   # URSSAF_DPAE_PRENOM, URSSAF_DPAE_PASSWORD and URSSAF_DPAE_SERVICE are required; URSSAF_DPAE_AUTHENTICATION_URI,
   # URSSAF_DPAE_DEPOSIT_URI, URSSAF_DPAE_CONSULTATION_URI and URSSAF_DPAE_DOWNLOAD_URI (the host overrides of the recipe,
-  # ADR 0002 and 0009) are optional repository variables.
+  # ADR 0002 and 0009) are optional repository variables, and so is URSSAF_DPAE_CONTRACT_DEPOSIT (`1` allows the one test
+  # call that writes, a test-mode deposit). Always the test mode, never real.
   contract:
     name: contract (URSSAF DPAE)
     if: github.event_name == 'workflow_dispatch' && inputs.contract
@@ -328,6 +329,22 @@ jobs:
         with:
           php-version: '8.2'
           dependencies: locked
+      - name: Check the required secrets are set
+        env:
+          URSSAF_DPAE_SIRET: ${{ secrets.URSSAF_DPAE_SIRET }}
+          URSSAF_DPAE_NOM: ${{ secrets.URSSAF_DPAE_NOM }}
+          URSSAF_DPAE_PRENOM: ${{ secrets.URSSAF_DPAE_PRENOM }}
+          URSSAF_DPAE_PASSWORD: ${{ secrets.URSSAF_DPAE_PASSWORD }}
+          URSSAF_DPAE_SERVICE: ${{ secrets.URSSAF_DPAE_SERVICE }}
+        run: |
+          status=0
+          for name in URSSAF_DPAE_SIRET URSSAF_DPAE_NOM URSSAF_DPAE_PRENOM URSSAF_DPAE_PASSWORD URSSAF_DPAE_SERVICE; do
+            if [ -z "$(printenv "$name")" ]; then
+              echo "::error::The secret $name is missing or empty: the contract tests would be skipped, not run."
+              status=1
+            fi
+          done
+          exit "$status"
       - run: vendor/bin/phpunit --testsuite=contract
         env:
           URSSAF_DPAE_SIRET: ${{ secrets.URSSAF_DPAE_SIRET }}
@@ -339,3 +356,4 @@ jobs:
           URSSAF_DPAE_DEPOSIT_URI: ${{ vars.URSSAF_DPAE_DEPOSIT_URI }}
           URSSAF_DPAE_CONSULTATION_URI: ${{ vars.URSSAF_DPAE_CONSULTATION_URI }}
           URSSAF_DPAE_DOWNLOAD_URI: ${{ vars.URSSAF_DPAE_DOWNLOAD_URI }}
+          URSSAF_DPAE_CONTRACT_DEPOSIT: ${{ vars.URSSAF_DPAE_CONTRACT_DEPOSIT }}

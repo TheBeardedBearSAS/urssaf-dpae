@@ -9,6 +9,15 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ### Added
 
+- Contract tests, benchmarks and documentation (lot 8): `tests/Contract` (`LiveContractTest`, `LiveGateway`, `SampleRecorder`), live
+  checks of the hosts, the authentication XML, the date formats, the list and download calls and, opt-in with
+  `URSSAF_DPAE_CONTRACT_DEPOSIT=1`, a test-mode deposit; skipped without `URSSAF_DPAE_SIRET`, `_NOM`, `_PRENOM`, `_PASSWORD` and
+  `_SERVICE` (optional `URSSAF_DPAE_{AUTHENTICATION,DEPOSIT,CONSULTATION,DOWNLOAD}_URI`), always `DeclarationMode::Test`, answers
+  kept as local samples in the git-ignored `var/contract-samples` (never the authentication exchange); `make test-contract` and the
+  manual CI job `contract` pass the same variables. PHPBench benchmarks `DeclarationValidationBench`, `DpaeFlowEncodingBench` and
+  `WireDecodingBench` (`make bench`, CI job `benchmark`). [docs/workflow.md](docs/workflow.md) (state machines, idempotence, retry,
+  reconciliation, outbox, polling), [docs/testing.md](docs/testing.md), the final README (standalone and Symfony quick starts),
+  and the roadmap and the open points of api-reference.md brought up to date.
 - Symfony bridge (lot 6, ADR 0003, 0009, `symfony/*` stay `require-dev` + `suggest`, floors `^6.4.3 || ^7.4 || ^8.0`):
   `UrssafDpaeBundle` (alias `urssaf_dpae`), configuration validated at build time (credentials through `%env()%`, service
   code `25` / `98` / any integer kept, four overridable base URIs and the concentrator port, `declaration_mode` ceiling

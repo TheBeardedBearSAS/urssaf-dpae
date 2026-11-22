@@ -20,10 +20,12 @@ Developed and maintained by [The Bearded Bear](https://the-bearded-bear.com).
 > process; the URSSAF documentation remains the authority on the API, and you remain responsible for the data your
 > application sends to URSSAF.
 
-> 🚧 **Work in progress.** The domain model, the HTTP gateway and the application layer (deposit, return
-> synchronisation, download, reconciliation of a lost answer) are implemented and usable without a framework, see the
-> quick start below. The Doctrine bridge (durable persistence, [docs/doctrine.md](docs/doctrine.md)) and the Symfony bundle
-> ([docs/symfony.md](docs/symfony.md)) are implemented; see [docs/roadmap.md](docs/roadmap.md) for what is deferred.
+> **Status: implemented.** The domain and declaration model, the HTTP gateway, the application layer (deposit, return
+> synchronisation, download, reconciliation of a lost answer, outbox), the Doctrine bridge and the Symfony bundle are
+> implemented and covered by the quality gate below. The first release waits for the contract tests to run against the live
+> hosts: the points that only URSSAF can settle (hosts, test indicator, authentication XML, bodies of the returns) are
+> listed as open in [docs/api-reference.md](docs/api-reference.md), each one configurable meanwhile. What is deferred is in
+> [docs/roadmap.md](docs/roadmap.md).
 
 ## Scope
 
@@ -100,6 +102,10 @@ your tests, `UrssafDpaeBuilder::withGateway()` takes a `Testing\SimulatedDpaeGat
 
 ## Symfony
 
+```sh
+composer require thebeardedbear/urssaf-dpae symfony/http-client symfony/lock symfony/messenger symfony/scheduler
+```
+
 ```yaml
 # config/packages/urssaf_dpae.yaml (copied by the Flex recipe in recipe/)
 urssaf_dpae:
@@ -108,16 +114,26 @@ urssaf_dpae:
         default: { siret: '%env(URSSAF_DPAE_SIRET)%', nom: '%env(URSSAF_DPAE_NOM)%', prenom: '%env(URSSAF_DPAE_PRENOM)%', password: '%env(URSSAF_DPAE_PASSWORD)%', service: '%env(int:URSSAF_DPAE_SERVICE)%' }
 ```
 
+```sh
+bin/console urssaf:dpae:check                                            # configuration, hosts, credentials, schema
+bin/console urssaf:dpae:deposit flow.xml --mode=test --reference=hire-42  # deposit one flow, the mode is never implied
+bin/console urssaf:dpae:sync-returns                                     # from a cron or the Scheduler: pick up the returns
+bin/console urssaf:dpae:reconcile                                        # settle the deposits whose answer was lost
+```
+
 Console commands `urssaf:dpae:check`, `deposit`, `returns`, `download`, `sync-returns`, `reconcile`, `relay-outbox` and
 `purge-outbox`, Messenger handlers, locks, a Scheduler schedule and a Flex recipe, all prefixed so that the URSSAF
-packages coexist. Details: [docs/symfony.md](docs/symfony.md).
+packages coexist. Durable persistence needs the Doctrine bridge. Details: [docs/symfony.md](docs/symfony.md),
+[docs/doctrine.md](docs/doctrine.md).
 
 ## Documentation
 
 - [docs/api-reference.md](docs/api-reference.md) — technical reference (single source of truth for the package).
 - [docs/symfony.md](docs/symfony.md) — Symfony bundle: configuration, commands, Messenger, locks, Scheduler, Flex recipe.
 - [docs/doctrine.md](docs/doctrine.md) — Doctrine persistence: schema, concurrency, transactions, personal data (GDPR).
-- [docs/roadmap.md](docs/roadmap.md) — planned architecture and order of work.
+- [docs/workflow.md](docs/workflow.md) — deposit and return state machines, idempotence, retry, reconciliation, outbox, polling.
+- [docs/testing.md](docs/testing.md) — test suites, fakes, the simulated gateway, contract tests, coverage, mutation, benchmarks.
+- [docs/roadmap.md](docs/roadmap.md) — architecture and order of work, with the lots delivered.
 - [docs/openapi/](docs/openapi/) — official OpenAPI contract(s) from the URSSAF API portal.
 - `docs/reference/` — official URSSAF documentation: not versioned (URSSAF documents), download it from the links in [docs/api-reference.md](docs/api-reference.md) into this local, git-ignored folder.
 - Catalogue page: https://portailapi.urssaf.fr/fr/catalogue-api/prd/dpae
@@ -132,11 +148,16 @@ PHP 8.2+. Development only needs Docker: every `make` target runs in a container
 make install     # build the image, install dependencies
 make ci          # full quality gate: cs, rector, phpstan, mago, deptrac, composer checks, hadolint, guard, coverage, infection
 make test        # unit + functional tests
-make bench       # benchmarks (PHPBench, tests/Benchmark), added with the implementation
+make bench       # benchmarks (PHPBench, tests/Benchmark)
+make test-contract  # live contract tests, test mode only, skipped without the URSSAF_DPAE_* variables
 make help        # every target
 ```
 
-`make ci PHP_VERSION=8.4` runs the gate on another PHP version.
+`make ci PHP_VERSION=8.4` runs the gate on another PHP version. The contract tests (`tests/Contract`) talk to the live
+URSSAF hosts and are skipped unless `URSSAF_DPAE_SIRET`, `URSSAF_DPAE_NOM`, `URSSAF_DPAE_PRENOM`, `URSSAF_DPAE_PASSWORD` and
+`URSSAF_DPAE_SERVICE` are set (optional: the four host overrides `URSSAF_DPAE_{AUTHENTICATION,DEPOSIT,CONSULTATION,DOWNLOAD}_URI`,
+and `URSSAF_DPAE_CONTRACT_DEPOSIT=1` for the one test that writes). They always run in test mode, see
+[docs/testing.md](docs/testing.md).
 
 Once the repository is public, `main` publishes its quality proofs, linked from the badges at the top of this file: the
 coverage report on Codecov, the full mutation report on the Stryker Dashboard, the SonarQube Cloud quality gate and the

@@ -5,10 +5,11 @@ commitment; it is reviewed at each minor release. Proposals are welcome in GitHu
 
 ## Planned
 
-- **Implement the package.** The repository currently holds the tooling and the specification; the order of work is in
-  [docs/roadmap.md](docs/roadmap.md): authentication (XML `identifiants`, opaque token), deposit of a gzip-compressed
-  DPAE flow, listing and download of the returns (AEE, conformity certificate, business report), then the Symfony and
-  Doctrine integrations.
+- **Implement the package.** Status: implemented (domain, XML/gzip HTTP gateway, deposit workflow, simulator, Doctrine
+  bridge, Symfony bundle, tests and benchmarks); what remains is validating it against the live hosts with the contract
+  tests. The order of work is in [docs/roadmap.md](docs/roadmap.md): authentication (XML `identifiants`, opaque token),
+  deposit of a gzip-compressed DPAE flow, listing and download of the returns (AEE, conformity certificate, business
+  report), then the Symfony and Doctrine integrations.
 - **Release 0.1, then 1.0.** Publish a first `0.x` once the deposit and return cycle works end to end, stabilise the
   public API (domain model, client, Symfony bundle, Doctrine integration), then release `1.0.0`. From 1.0 on, breaking
   changes only happen in major versions, as required by [Semantic Versioning](https://semver.org/).

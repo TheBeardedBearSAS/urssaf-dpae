@@ -125,25 +125,33 @@ the API itself. Symfony components in `require-dev` `^6.4.3 || ^7.4 || ^8.0`, Sy
 
 ## Tests
 
+- Benchmarks (`make bench`, lot 8): PHPBench over `tests/Benchmark` (declaration validation, flow encoding and gzip, decoding of the answers).
 - Unit: value objects, declaration validation (§3.4), XML writers/readers against `tests/Fixtures/wire/*` (the
   declaration writer's golden test is `deposit_request_minimal.xml`; the other wire examples are not published and
   must be captured, see api-reference §5), handlers with fake doubles, token provider (replay on expired token), 401
   realm mapping, `url` origin policy, reconciliation cases.
 - Functional: Symfony bundle wiring (simulator guard, recipe), Doctrine mapping, repository contract traits.
-- Contract (`make test-contract`, manual CI job): real credentials (an *Urssaf en ligne* subscriber, or a registered
+- Contract (`make test-contract`, manual CI job; delivered in lot 8, [testing.md](testing.md)): real credentials (an *Urssaf en ligne* subscriber, or a registered
   concentrator) in `URSSAF_DPAE_SIRET`, `URSSAF_DPAE_NOM`, `URSSAF_DPAE_PRENOM`, `URSSAF_DPAE_PASSWORD`,
-  `URSSAF_DPAE_SERVICE`, optional `URSSAF_DPAE_*_URI` overrides. Always a `test` installation and
+  `URSSAF_DPAE_SERVICE`, optional `URSSAF_DPAE_{AUTHENTICATION,DEPOSIT,CONSULTATION,DOWNLOAD}_URI` overrides, and `URSSAF_DPAE_CONTRACT_DEPOSIT=1` to allow the one test that writes. Always a `test` installation and
   `DeclarationMode::Test`, never real. First goals: settle hosts and paths, the test indicator values, the
   authentication XML shape, a built flow without raison sociale, and capture samples of the AEE, rejection notice,
   list response and returns.
 
 ## Order of work
 
-1. Replace `Environment` / `UrssafEndpoints` (ADR 0002, done in lot 4) and complete `deptrac.yaml` (Contract, Testing, Standalone; done in lot 5).
-2. Domain: lot 1 (value objects, sum types, exceptions), then lot 2 (declaration model and its validation).
-3. Wire writers/readers + fixtures (`SafeXmlReader`, identifiants, envoi, retours, declaration writer).
-4. HTTP gateway (authentication, deposit, lists, download, status mapping, 422 / 429).
-5. Application commands/queries (deposit, synchronisation, download, reconciliation; the five main ones are done in lot 5, see "Already in place" for the rest).
-6. Symfony bridge and Flex recipe (delivered, lot 6: [symfony.md](symfony.md), ADR 0009 amendment). `RelayOutbox` / `PurgeOutbox` and the `IntegrationEventSink` port shipped with it; still deferred: `DownloadDueReturns`, `ResolveDepositOutcome`, `RequeueInvalidCredentials`, `GetWorkflowOverview` / status.
-7. Doctrine bridge.
-8. Contract tests, then remove the settled open points from `api-reference.md` §5 and amend the ADRs concerned.
+Delivered, in order (each lot merged green: 100 % lines, 96 % branches at least, MSI 100 %):
+
+1. Replace `Environment` / `UrssafEndpoints` (ADR 0002, lot 4) and complete `deptrac.yaml` (Contract, Testing, Standalone; lot 5). **Done.**
+2. Domain: lot 1 (value objects, sum types, exceptions), then lot 2 (declaration model and its validation). **Done.**
+3. Wire writers/readers + fixtures (`SafeXmlReader`, identifiants, envoi, retours, declaration writer). **Done.**
+4. HTTP gateway (authentication, deposit, lists, download, status mapping, 422 / 429). **Done (lot 4).**
+5. Application commands/queries (deposit, synchronisation, download, reconciliation). **Done (lot 5);** see "Already in place" for what stays deferred.
+6. Symfony bridge and Flex recipe ([symfony.md](symfony.md), ADR 0009 amendment). **Done (lot 6).** `RelayOutbox` / `PurgeOutbox` and the `IntegrationEventSink` port shipped with it.
+7. Doctrine bridge ([doctrine.md](doctrine.md), ADR 0008). **Done (lot 7).**
+8. Contract tests, benchmarks and documentation ([testing.md](testing.md), [workflow.md](workflow.md)). **Done (lot 8):** the suite in `tests/Contract` (skipped without credentials, test mode only), the PHPBench benchmarks in `tests/Benchmark`, the final README and CHANGELOG.
+
+Still to do, because only URSSAF can answer: run `make test-contract` with the credentials of a subscriber, then remove the
+settled open points from api-reference.md section 5 and amend the ADRs concerned (hosts, test indicator, authentication
+XML, bodies of the returns). Deferred use cases: `DownloadDueReturns`, `ResolveDepositOutcome`, `RequeueInvalidCredentials`,
+`GetWorkflowOverview` / status (and the `status`, `resolve`, `requeue`, `download-returns` commands that need them).

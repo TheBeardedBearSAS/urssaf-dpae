@@ -29,6 +29,7 @@ $finder = Finder::create()
         __DIR__ . '/.php-cs-fixer.dist.php',
         __DIR__ . '/composer-unused.php',
         __DIR__ . '/rector.php',
+        __DIR__ . '/phpstan-constants.php',
     ]);
 
 // Every PHP source file carries the same short licence header (OpenSSF: copyright_per_file, license_per_file).

@@ -61,7 +61,7 @@ Out of scope: compromise of the host server or database, and the security of the
 | B5 package to logs | Technical metadata | Fixed set of fields: method, host, path, status, duration, exception class; no body, no header value |
 | B6 pipeline to consumers | Releases | Pinned actions, least-privilege tokens, SLSA provenance, checksums (in place, see `.github/workflows/`) |
 
-Inside the package, Deptrac enforces the layers that separate these zones (`deptrac.yaml`, *to complete*: the Contract, Testing and Standalone layers are missing from `deptrac.yaml`).
+Inside the package, Deptrac enforces the layers that separate these zones (`deptrac.yaml`, which declares the Contract, Testing and Standalone layers too).
 
 ## 5. Secure design principles
 
