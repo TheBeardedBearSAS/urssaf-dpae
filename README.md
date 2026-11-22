@@ -38,6 +38,14 @@ subscriber. XML payloads. Production only: test vs real is selected by the test 
 (Swagger `https://api.urssaf.fr/authentifier_dpae` versus dedicated hosts in the PDF guide) are an open point, see the
 [reference](docs/api-reference.md).
 
+## HTTP client
+
+The gateway takes any PSR-18 client with PSR-17 factories. **Disable the redirections of the client** (for example
+Symfony HttpClient `max_redirects => 0`): a 307 / 308 would make the client resend the deposit `POST`, and the package
+never resends a deposit (a 3xx answer is reported as an unexpected response). A base URI may use `http` only for a mock
+server, never for a published URSSAF host. A real declaration needs `ApiConfiguration::withDeclarationMode(DeclarationMode::Real)`
+(default `Test`) and a flow of mode `Real`.
+
 ## Documentation
 
 - [docs/api-reference.md](docs/api-reference.md) — technical reference (single source of truth for the package).

@@ -30,10 +30,26 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
   responsibilities), `ROADMAP.md`, and the code review requirements and first-contribution tasks in `CONTRIBUTING.md`.
 - Security assurance case (threat model, trust boundaries, secure design principles, countered weaknesses) in
   `docs/security/assurance-case.md`, linked from `SECURITY.md`.
+- HTTP gateway (lot 4, ADR 0001, 0002, 0004 to 0006): ports `Application\Port\Urssaf\DpaeGateway`
+  (`deposit`, `listReturns`, `downloadReturn`), `CredentialsProvider`, `TokenStore` and the gateway exceptions
+  (`UrssafUnavailable`, `UrssafAuthenticationFailed`, `UrssafRequestRejected`, `PollingConstraintViolated`,
+  `ReturnNoLongerAvailable`, `ReturnNotDownloadable`, `OutcomeUnknown`); `Domain\Tenant\TenantId`; the PSR-18 / PSR-17
+  adapter `UrssafHttpGateway` built by `UrssafGatewayFactory` (`ApiConfiguration`, `ServiceEndpoints` with four
+  overridable base URIs and the concentrator port, `GatewayOptions`); XML token authentication kept in memory
+  (`DpaeTokenProvider`, `InMemoryTokenStore`, `InMemoryCredentialsProvider`), a single replay on `Expiration du jeton`,
+  gzip request and answer bodies, a size limit on answers, and a deposit that is never resent (`OutcomeUnknown`).
+- Installation ceiling `ApiConfiguration::withDeclarationMode()` (default `Test`): the gateway refuses a `Real` flow
+  before any call (`declaration_mode.not_allowed`, ADR 0003 amendment); `http` base URIs are refused for the published
+  URSSAF hosts; `TenantId` refuses control characters.
+- Runtime requirements: `ext-zlib`, `psr/http-client`, `psr/http-factory`, `psr/http-message`, `psr/clock`, `psr/log`
+  (`suggest`: a PSR-18 client and PSR-17 factories).
 - Architecture decision records in `docs/adr/`, starting with ADR 0000 (reference architecture inherited from
   `urssaf-tiers-prestations`).
 
 ### Changed
+
+- `Infrastructure\Urssaf\Environment` (Sandbox / Production) is removed and `UrssafEndpoints` loses the
+  `/authentifier_dpae` prefix: there is no sandbox host, the four hosts are overridable (ADR 0002).
 
 - Infection: `timeout` raised from 30 s to 180 s, and `make infection` and the CI job fail when a mutant is skipped (Infection never runs a mutant whose covering tests exceed the limit, yet reports MSI 100 %).
 - Infection: a timed-out mutant counts as escaped (`timeoutsAsEscaped`), and `make infection` and the CI job fail on any timed-out or syntax-error mutant: every mutant really runs and is killed.

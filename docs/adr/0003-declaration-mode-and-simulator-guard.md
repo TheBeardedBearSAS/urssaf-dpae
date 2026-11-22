@@ -105,3 +105,14 @@ Replaces the "raw XML flows" bullet and the factory signature of the "mode in th
   blank input stays `flow.empty`. A UTF-16 document is not an XML flow either for this check.
 - Order of the checks: `flow.empty`, `flow.format_not_supported`, `flow.not_well_formed`, `flow.dtd_not_allowed`,
   `flow.unexpected_root`, `flow.declaration_mode_mismatch`.
+
+## Amendment 2026-11-22 — the installation ceiling is enforced by the HTTP gateway
+
+- **Where.** `ApiConfiguration::withDeclarationMode(DeclarationMode)` holds the `declaration_mode` ceiling of the
+  installation; its default is `DeclarationMode::Test` and `Real` is never a default.
+- **Check.** `UrssafHttpGateway::deposit()` calls `DeclarationMode::allows()` with the mode of the flow **first**, before
+  the size check, the credentials lookup and any HTTP call, so no token call is made either. A `Real` flow with a
+  `Test` ceiling is an `InvariantViolation`, code `declaration_mode.not_allowed` (parameters `mode`,
+  `installation_mode`). A `Test` flow is allowed whatever the ceiling.
+- This is the lowest layer that can enforce the rule: the application layer ([ADR 0007](0007-declaration-model.md)) may
+  refuse earlier, but a gateway built directly with `UrssafGatewayFactory` is guarded as well.

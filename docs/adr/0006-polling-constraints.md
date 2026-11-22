@@ -78,3 +78,13 @@ explicit offset (`Z`, `+01`, `+01:00`), which wins over the configured zone. It 
 date, an impossible date or a clock hour skipped by a time change gives a null instant and the caller keeps the raw
 string (`publication` / `production` stay available raw on `ReturnReference`). The configured zone defaults to
 `Europe/Paris` and the lower-case `hh` of the Swagger is read as a 24-hour clock (§5.8, open point).
+
+## Amendment 2026-11-22 — the port as implemented (lot 4)
+
+- `DpaeGateway::listReturns(TenantId, Instant $from, ?Instant $to): list<ReturnReference>` replaces the `ReturnList` and
+  `DateTimeImmutable` of "Decision": the raw values already live on `ReturnReference`, so no raw listing is kept
+  (api-reference.md section 5.18). `$from` after `$to` is refused before any call (`InvariantViolation`
+  `returns.range_inverted`); `$from == $to` is allowed.
+- `PollingConstraintViolated::withStatus(int $status, ?int $retryAfterSeconds)`: the delay is `Retry-After` (seconds or
+  HTTP date) or null, and the caller applies `WorkflowPolicy::pollingRetryDelay()`. A 5xx on a list or a download is an
+  `UrssafUnavailable` (`mayHaveReachedUrssaf()` true, harmless for reads).

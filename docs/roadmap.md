@@ -10,15 +10,15 @@ the first version covers **phase 1 (raw-flow deposit) + the declaration model** 
 ## Already in place (skeleton)
 
 - `SpecVersion::CURRENT` (`1.0.0`).
-- `Infrastructure\Urssaf\Environment` (Sandbox / Production base URIs) and `Infrastructure\Urssaf\UrssafEndpoints`
-  (Swagger paths under the base path `/authentifier_dpae`). **Both change first** ([ADR 0002](adr/0002-hosts-per-service.md)):
-  - `Environment` and its test are deleted (no sandbox host; "production" is `DeclarationMode::Real`,
-    [ADR 0003](adr/0003-declaration-mode-and-simulator-guard.md));
-  - `ServiceEndpoints` holds four overridable base URIs (`mon.urssaf.fr`, `depot.dpae-edi.urssaf.fr`,
-    `consultation.dpae-edi.urssaf.fr`, `telechargement.dpae-edi.urssaf.fr`), port `8443` added to the default
-    non-authentication URIs of a concentrator identity;
-  - `UrssafEndpoints` keeps the paths without the `/authentifier_dpae` prefix (only the authentication path is
-    `/authentifier_dpae`).
+- `Infrastructure\Urssaf\UrssafEndpoints` (paths without the `/authentifier_dpae` prefix, only the authentication path
+  is `/authentifier_dpae`), `Infrastructure\Urssaf\DpaeService` and `ServiceEndpoints` (four overridable base URIs
+  `mon.urssaf.fr`, `depot.dpae-edi.urssaf.fr`, `consultation.dpae-edi.urssaf.fr`, `telechargement.dpae-edi.urssaf.fr`,
+  port `8443` added to the default non-authentication URIs of a concentrator identity). `Environment` and its test are
+  deleted (no sandbox host; "production" is `DeclarationMode::Real`,
+  [ADR 0003](adr/0003-declaration-mode-and-simulator-guard.md)) ([ADR 0002](adr/0002-hosts-per-service.md)).
+- Lot 4 (HTTP gateway) is implemented: see "Application" and "Infrastructure" below. The ports are tenant-scoped, so
+  `Domain\Tenant\TenantId` was added with it; the rest of lot 5 (`ExternalReference`, `Deposit`, `DepositState`,
+  `DownloadState`) is still to do.
 
 ## Domain (`src/Domain`)
 
@@ -52,7 +52,7 @@ Split into lots; each lot is merged green (100 % coverage, MSI 100 %).
 
 ### Lot 5 — Application (domain parts)
 
-- `Tenant\TenantId` ([ADR 0001](adr/0001-xml-token-authentication.md)), `Deposit\ExternalReference` (the host's
+- (`Tenant\TenantId` exists since lot 4, [ADR 0001](adr/0001-xml-token-authentication.md).) `Deposit\ExternalReference` (the host's
   identifier of the hire), the `Deposit\Deposit` aggregate with `DepositState` (`pending`, `depositing`, `received`,
   `rejected`, `failed`, `outcome_unknown`, `not_received`, `invalid_credentials`)
   ([ADR 0005](adr/0005-deposit-result-and-unknown-outcome.md)) and `Return\DownloadState`
@@ -61,7 +61,8 @@ Split into lots; each lot is merged green (100 % coverage, MSI 100 %).
 ## Application (`src/Application`)
 
 - Ports: `Port\Urssaf\DpaeGateway` (`deposit(TenantId, DpaeFlow): DepositResult`,
-  `listReturns(TenantId, from, ?to): ReturnList`, `downloadReturn(TenantId, ReturnReference): ReturnContent`),
+  `listReturns(TenantId, Instant $from, ?Instant $to): list<ReturnReference>`,
+  `downloadReturn(TenantId, ReturnReference): ReturnContent`; implemented in lot 4),
   `Port\Urssaf\OutcomeUnknown`, `Port\Urssaf\PollingConstraintViolated`, `Port\Urssaf\ReturnNoLongerAvailable`,
   `Port\Urssaf\ReturnNotDownloadable`, `CredentialsProvider` (`InMemoryCredentialsProvider`), `TokenStore`
   (in-memory only), `DepositRepository`, `ReturnRepository`, `ReturnContentStore`, `SynchronizationCursorRepository`,
@@ -82,9 +83,13 @@ Split into lots; each lot is merged green (100 % coverage, MSI 100 %).
 - `Urssaf\UrssafHttpGateway` + `Urssaf\Wire\*`: `SafeXmlReader` (`LIBXML_NONET`, DOCTYPE refused, declared encoding
   honoured), `IdentifiantsXmlWriter`, `EnvoiXmlReader`, `RetoursXmlReader`, `DpaeFlowBuilder`
   (ISO-8859-1; `DeclarationVocabulary` and `DeclarationRules` live in the Domain), `yyyyMMddHHmmss` date codec with a configurable time zone.
-- `Urssaf\ApiConfiguration`: four base URIs, `concentrator_port`, `declaration_mode`, `test_indicator.*`,
-  `authentication_encoding`, `deposit_content_type`, `max_flow_bytes`, `returns_time_zone`, declaration vocabulary
-  and name pattern.
+- `Urssaf\ApiConfiguration` (`defaults()` plus `with*()`; lot 4): `ServiceEndpoints` (four base URIs,
+  `concentrator_port`), `authentication_encoding`, `deposit_content_type`, `max_flow_bytes`, `max_response_bytes`,
+  `returns_time_zone`. `declaration_mode`, `test_indicator.*`, the declaration vocabulary and name pattern belong to the
+  builder and the bridges (`TestIndicators`, `DeclarationVocabulary`, `DeclarationRules`).
+- Lot 4 also ships `Urssaf\UrssafGatewayFactory` / `GatewayOptions` / `HttpTransport` (the standalone entry point),
+  `Urssaf\Http\{ApiRequest,HttpAnswer,AnswerInterpreter}`, `Infrastructure\Clock\SystemClock`,
+  `Infrastructure\Credentials\InMemoryCredentialsProvider` and `Infrastructure\TokenStore\InMemoryTokenStore`.
 - `Testing\SimulatedDpaeGateway` (refuses `Real`, no returns 20 / 41).
 
 ## Bridges
@@ -123,7 +128,7 @@ the API itself. Symfony components in `require-dev` `^6.4.3 || ^7.4 || ^8.0`, Sy
 
 ## Order of work
 
-1. Replace `Environment` / `UrssafEndpoints` (ADR 0002) and complete `deptrac.yaml` (Contract, Testing, Standalone).
+1. Replace `Environment` / `UrssafEndpoints` (ADR 0002, done in lot 4) and complete `deptrac.yaml` (Contract, Testing, Standalone).
 2. Domain: lot 1 (value objects, sum types, exceptions), then lot 2 (declaration model and its validation).
 3. Wire writers/readers + fixtures (`SafeXmlReader`, identifiants, envoi, retours, declaration writer).
 4. HTTP gateway (authentication, deposit, lists, download, status mapping, 422 / 429).

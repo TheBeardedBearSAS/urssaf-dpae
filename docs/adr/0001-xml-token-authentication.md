@@ -63,7 +63,9 @@ Swagger `securityDefinitions` empty):
 ### 401 mapping
 
 The realm is read from `WWW-Authenticate` (scheme `Basic` or `DPAELogin`, value between `"…"` or `«…»`, as printed in
-§1.3) and mapped to `Domain\Exception\AuthenticationFailure` (backed enum, raw realm kept):
+§1.3) and mapped to `Domain\Exception\AuthenticationFailure` (backed enum; the trimmed raw realm text, at most 100 characters, is kept next to it in
+`UrssafAuthenticationFailed::realm()`, also for an unlisted realm; the `realm` parameter name is matched
+case-insensitively):
 
 | Call | Realm (§1.3) | `AuthenticationFailure` | Exception |
 |---|---|---|---|
@@ -120,3 +122,15 @@ Decided while implementing the Domain value objects (lot 1).
   U+FFFE, U+FFFF) is refused with `InvalidValue` `authentication.invalid_character` (parameter `field`), because ext-dom
   would silently drop it and the password sent would differ from the one typed. The message never carries the value.
 - The shape of the body (root `identifiants`, children in the order of the Swagger properties) stays inferred (§5.4).
+
+## Amendment 2026-11-22 — token provider as implemented (lot 4)
+
+- **Tenant.** `Domain\Tenant\TenantId` (non-blank UTF-8, at most 64 characters) is added with the gateway:
+  `CredentialsProvider::forTenant(TenantId): DeclarantCredentials`, `TokenStore::get|save|delete(string $key, DpaeToken)`.
+  The cache key is `urssaf_dpae.token.` + `sha256(tenant|authentication base URI|siret|service code)`, never the password.
+- **429 on the authentication call** is an `UrssafUnavailable` (retryable, `mayHaveReachedUrssaf()` false, `Retry-After`
+  kept), not an `UnexpectedUrssafResponse`: a quota is the likely cause and the answer is not published. Every other
+  non-2xx status keeps the table above; an HTML 200 or an unusable token is an `UnexpectedUrssafResponse`.
+- **Replay.** `TokenInvalid`, `NotRegistered`, `PasswordExpired`, `InvalidCredentials` and `Unknown` on a call drop the
+  cached token and are thrown without replay; only `TokenExpired` replays, once. A failure of the re-authentication
+  (credential refusal, 5xx, transport) is thrown as it is.

@@ -13,6 +13,7 @@ declare(strict_types=1);
 namespace TheBeardedBear\UrssafDpae\Infrastructure\Urssaf\Exception;
 
 use RuntimeException;
+use TheBeardedBear\UrssafDpae\Application\Port\Operation;
 use TheBeardedBear\UrssafDpae\Domain\Exception\UrssafException;
 use Throwable;
 
@@ -26,6 +27,14 @@ final class UnexpectedUrssafResponse extends RuntimeException implements UrssafE
     public static function invalidPayload(string $reason): self
     {
         return new self(\sprintf('Unexpected URSSAF response: %s.', $reason));
+    }
+
+    /**
+     * A status the contract does not describe for the operation (3xx, 404 on a deposit, 406, 415, other 4xx).
+     */
+    public static function unexpectedStatus(Operation $operation, int $httpStatus): self
+    {
+        return new self(\sprintf('Unexpected URSSAF response: operation %s answered HTTP %d.', $operation->value, $httpStatus));
     }
 
     public static function causedBy(string $reason, Throwable $previous): self

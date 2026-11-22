@@ -24,8 +24,8 @@ to the DSN guide (*DSN_Guide-implementation-API* V3.5, dsn-info.fr, not provided
 (*Dessin d'enregistrement DPAE*, `dsn_bilans_v01r06.xsd`); everything those documents would specify is flagged
 "not published" below.
 
-> Status: specification, being implemented. Lots 1 to 3 of the [roadmap](roadmap.md) exist (domain value objects, the
-> declaration model and the XML wire codecs); the HTTP client, the use cases and the bridges do not yet.
+> Status: specification, being implemented. Lots 1 to 4 of the [roadmap](roadmap.md) exist (domain value objects, the
+> declaration model, the XML wire codecs and the PSR-18 HTTP gateway); the use cases and the bridges do not yet.
 
 > **Source and rights.** The specification, the field names, the codes and the official JSON examples quoted here come
 > from the URSSAF documents listed above and remain URSSAF's property. They are reproduced only so the package can
@@ -412,7 +412,9 @@ section references; this list is the summary.
    replays the call once; `Jeton manquant ou invalide` drops the token and throws. Every 401 is mapped by realm
    (§1.3) to `AuthenticationFailure` (`PasswordExpired`, `InvalidCredentials`, `NotRegistered`, `TokenInvalid`,
    `TokenExpired`, `Unknown`); credential refusals park the tenant's records in `invalid_credentials`. Local
-   credential checks are the Swagger lengths only (the accent-less name pattern is not applied, §5.4).
+   credential checks are the Swagger lengths only (the accent-less name pattern is not applied, §5.4). The realm is
+   read from `WWW-Authenticate` between `"…"` or `«…»` (UTF-8 or ISO-8859-1 bytes). The token is cached under an
+   opaque key hashing tenant, authentication base URI, SIRET and service code, never the password.
 2. **Hosts** ([ADR 0002](adr/0002-hosts-per-service.md)). `Environment` (and `Sandbox`) is removed. Four base URIs
    (authentication `https://mon.urssaf.fr`, deposit `https://depot.dpae-edi.urssaf.fr`, consultation
    `https://consultation.dpae-edi.urssaf.fr`, download `https://telechargement.dpae-edi.urssaf.fr`), each overridable
@@ -423,7 +425,8 @@ section references; this list is the summary.
    `98` identity, never to an overridden URI nor to authentication. The `url` of a `retour` is honoured **only if its
    origin (scheme, host, effective port) equals the configured download origin**; otherwise the download is rebuilt
    from `idFlux` / `idRetour`, or fails with `ReturnNotDownloadable` without `retour.id`. Redirects are never
-   followed.
+   followed. A base URI or a return `url` carrying credentials (`user@`), whitespace, a control character, a
+   backslash or port `0` is refused (`WebUri`): `https://good-host@evil/` is never on the origin.
 3. **Test vs real is a payload concern** ([ADR 0003](adr/0003-declaration-mode-and-simulator-guard.md)).
    `DeclarationMode` (`Test` | `Real`) is the package's notion of "production". The installation mode
    `declaration_mode` (default `test`, never `real` by default) caps the required per-deposit mode (`Real` deposit in a
@@ -447,13 +450,15 @@ section references; this list is the summary.
    department stay raw strings.
 5. **Request headers and encoding** ([ADR 0004](adr/0004-xml-gzip-client.md)). Deposit: `Authorization: DPAELogin
    jeton=…`, `Content-Type: text/plain` (configurable), `Content-Encoding: gzip`, body `gzencode()` of the unchanged
-   flow bytes. Every request sends `Accept-Encoding: gzip`; a still-gzipped answer is decoded by the client, capped at
-   `max_response_bytes` (package default against decompression bombs).
+   flow bytes. Every request sends `Accept-Encoding: gzip`; a still-gzipped answer is decoded by the client
+   (`gzdecode()` with a length limit), and every decoded answer is capped at `max_response_bytes` (package default
+   against decompression bombs, `null` disables it). Whatever the PSR-18 client throws is a transport failure.
 6. **Deposit result is a sum type** ([ADR 0005](adr/0005-deposit-result-and-unknown-outcome.md)):
    `ElectronicReceipt` (200) | `RejectionNotice` (422 with an XML body), each with nullable `FlowId`, declarant SIRET
    and generation date extracted from the Swagger `envoi` names, and the raw document kept. 400 and 404 / 406 / 415 /
    3xx → `failed` (not processed, not retried); transport error, timeout, 5xx, unreadable 200, non-XML 422 →
-   `OutcomeUnknown` (`outcome_unknown`).
+   `OutcomeUnknown` (`outcome_unknown`). Any other 2xx is read as a receipt, a 429 as `PollingConstraintViolated`, a failed
+   token call (first or re-authentication) stays a retryable `UrssafUnavailable` because it proves nothing was sent.
 7. **Unit deposit and size** ([ADR 0004](adr/0004-xml-gzip-client.md), [ADR 0005](adr/0005-deposit-result-and-unknown-outcome.md)).
    One flow per call; no split, merge or archive. Optional `max_flow_bytes` (default 100 000 000, the FAQ's 100 Mo)
    checked on the uncompressed flow. `DepositDpae` carries the host's `ExternalReference`; the `DpaeFlow` carries its
@@ -579,8 +584,9 @@ section references; this list is the summary.
     `flux` elements holding `retour` elements, every field (Swagger names) read as a child element or as an attribute
     under any namespace; a `retour` without an integer `nature` (an optional `+` sign is refused), `statut`,
     `publication` or `production`, or a `flux` holding a `retour` without a usable `id`, is refused rather than skipped;
-    a `flux` without any `retour` is skipped (`RetoursXmlReader`, ADR 0004). The raw XML of a listing is kept by the
-    HTTP client (lot 4), not by the reader.
+    a `flux` without any `retour` is skipped (`RetoursXmlReader`, ADR 0004). The raw XML of a listing is **not kept**:
+    `DpaeGateway::listReturns()` returns `list<ReturnReference>`, whose raw values (`publicationRaw`, `productionRaw`,
+    status code) already preserve what was read (ADR 0006 amendment).
 19. **Inferred XML form of `envoi`** (fixtures `envoi_*.xml` are fictitious): flow id `IdFluxDPAE` (else the `id` of the
     first `flux`), `siret` (Swagger `declarant.siret`, looked up under `declarant` first, then anywhere), generation
     date `DateGeneration` / `dateGeneration` (the `publication` of a `retour` is not one), reject reasons `motif` /
@@ -592,3 +598,15 @@ section references; this list is the summary.
 21. **Authentication body written in UTF-8 by default**: a character the declared encoding lacks is written as a numeric
     character reference, a character XML 1.0 cannot carry is refused (`IdentifiantsXmlWriter`, same inferred shape as
     §5.4).
+22. **Defaults of the HTTP gateway** (lot 4, not specification values): `max_response_bytes` `100000000` (decoded answers;
+    `null` disables it), `User-Agent: thebeardedbear-urssaf-dpae`, no `Accept` header, `Content-Type: application/xml`
+    for the authentication body. A 429 on the authentication call is read as a transient failure
+    (`UrssafUnavailable`, retryable, call not sent) rather than as an unexpected 4xx, since it is not published and a
+    quota is the likely cause (ADR 0001 amendment). A 2xx other than 200 on the deposit is read as a receipt. The
+    time zone of `Retry-After` HTTP dates is GMT as RFC 9110 requires; no `Retry-After` is published for this API (§1.1).
+    A 429 on the deposit and on the download (not published for them: the Swagger lists it for the lists only) is read
+    like a list one, as `PollingConstraintViolated` (retryable, never an unknown outcome since nothing was processed).
+    A base URI may use `http` only for a mock server: `http` is refused (`base_uri.insecure_scheme`) for the four published
+    URSSAF hosts. `declaration_mode` (ceiling of the installation, default `test`, ADR 0003 amendment): a `real` flow with
+    a `test` ceiling is refused before any call (`declaration_mode.not_allowed`). The PSR-18 client must not follow
+    redirects (a 307 / 308 would resend the deposit); transport exceptions are never chained (class name only).

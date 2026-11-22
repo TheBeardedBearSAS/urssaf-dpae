@@ -161,3 +161,22 @@ Refines "Result sum type" as implemented in lot 1.
 - The declarant SIRET is looked up under `declarant` first (Swagger `envoi_identification.declarant.siret`), then
   anywhere in the document. Every field is nullable and an unusable value is null, never an error; only an unreadable
   body (not XML, DOCTYPE, unsupported charset) is `UnexpectedUrssafResponse`. The raw answer is kept as the `RawDocument`.
+
+## Amendment 2026-11-22 — `OutcomeUnknown` and the deposit boundary (lot 4)
+
+- `Application\Port\Urssaf\OutcomeUnknown` (not a `RetryableException`, `mayHaveReachedUrssaf()` always true) has three
+  factories: `afterFailure(Operation, class)` (transport error, timeout or anything the client throws once the request
+  was started; only the class name is kept), `afterStatus(Operation, status)` (5xx) and `unreadableAnswer(Operation,
+  reason, ?previous)` (HTML, blank, malformed, DOCTYPE, bad gzip, over the response limit, unsupported charset, a 422
+  that is not XML).
+- The token is obtained **before** the unknown-outcome boundary: a failed first token call or re-authentication is an
+  `UrssafUnavailable` (`mayHaveReachedUrssaf()` false), a credential refusal an `UrssafAuthenticationFailed`; neither is
+  an unknown outcome.
+- Any 2xx is read as the receipt (the contract says 200), a 429 is a `PollingConstraintViolated` (not processed), and
+  `max_flow_bytes` is checked before any call (`InvalidValue` `flow.too_large`).
+
+## Amendment 2026-11-22 — any other failure after the send
+
+`UrssafHttpGateway::deposit()` turns every `Throwable` that is neither an `UrssafException` nor a `RetryableException`
+(a bug, a failing collaborator) into `OutcomeUnknown::afterFailure()` once the call may have left, keeping only its class
+name: it must never surface as a failure that lets the caller resend the flow.

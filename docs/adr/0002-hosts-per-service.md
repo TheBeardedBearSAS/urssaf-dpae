@@ -87,3 +87,17 @@ the token: following any API-supplied URL would hand a credential to whatever ho
   through `id` while it exists. If the contract tests show that real `url` values use another origin, the allowed
   origins become a configuration list (open point §5.1).
 - The `concentrator_port` default stays the published `8443` and is configurable in case it changes.
+
+## Amendment 2026-11-22 — URI checks and class names (lot 4)
+
+- The classes are `Infrastructure\Urssaf\DpaeService`, `ServiceEndpoints` (`defaults()`, `withBaseUri()`,
+  `withConcentratorPort()`, `baseUri()`, `uri()`, `isOnDownloadOrigin()`) and the internal `WebUri` (parsing and origin).
+- A configured base URI **and** a return `url` must be an absolute `http` or `https` URI with a host and no credentials
+  (`user@`, whatever the host), no whitespace, control character or backslash, and port `0` is refused. `http` is
+  accepted for a base URI so a mock server can stand for a host; a `url` is trusted only if its scheme equals the
+  configured one, so an `https` to `http` downgrade is refused. The origin is compared as `scheme://host:port`, scheme
+  and host lower-cased, `443` / `80` made explicit.
+- The port is added to a default URI by string concatenation; a configured `concentrator_port` outside 1..65535 is
+  refused (`concentrator_port.out_of_range`).
+- A refused `url` without `retour.id` throws `ReturnNotDownloadable::urlOutsideDownloadOrigin()` carrying only the
+  origin of the `url` (`unparsable` when it has none).

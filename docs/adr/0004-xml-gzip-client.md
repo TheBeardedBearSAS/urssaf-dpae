@@ -41,7 +41,8 @@ catalogue. The DPAE API exchanges XML, gzip and PDF ([api-reference.md](../api-r
 - Optional local size limit of the deposited flow, `max_flow_bytes` (default `100000000`, the "100 Mo" of the FAQ,
   §1.2), checked on the **uncompressed** flow because whether the limit applies before or after compression is not
   published (§5.16). `null` disables it. No other local limit.
-- Redirects are never followed ([ADR 0002](0002-hosts-per-service.md)).
+- Redirects are never followed ([ADR 0002](0002-hosts-per-service.md)): a 307 / 308 would resend the deposit `POST`, so
+  the PSR-18 client **must** be configured not to follow them (for example Symfony HttpClient `max_redirects => 0`).
 
 ### Reading XML
 
@@ -116,4 +117,27 @@ test must run the same corpus with `DpaeFlow::LIBXML_OPTIONS` when the class is 
   is refused (a `flux` without any `retour` is skipped and needs no id), and so is a `retour` without an integer `nature`
   (an explicit `+` sign is refused), `statut`, `publication` or `production`. Values of a closed list that this version
   does not know are kept raw.
-- The reader returns the references only; keeping the raw XML of a listing is the role of the HTTP client (lot 4).
+- The reader returns the references only; the raw XML of a listing is not kept (ADR 0006 amendment, lot 4).
+
+## Amendment 2026-11-22 — the client as implemented (lot 4)
+
+- `Http\HttpAnswer` (ADR name) reads the status, `Content-Type`, `Content-Encoding`, `WWW-Authenticate` and `Retry-After`
+  and decodes the body only when asked: the body of an error answer is never read. `Content-Encoding` `gzip` / `x-gzip`
+  is decoded with `gzdecode($body, $limit)` (a corrupt or oversized body warns, silenced by a scoped error handler, and
+  is refused as one `UnexpectedUrssafResponse`); `identity` or no coding is returned as is; any other coding is refused.
+  `max_response_bytes` is applied to **every** decoded body, not only to gzip ones. The stream is read by blocks and
+  never beyond `limit + 1` bytes (a gzip body: the limit plus a small compression overhead), so an oversized body is
+  never held whole in memory. A malformed `WWW-Authenticate`
+  gives the realm `Unknown`.
+- The client hands every status other than 401 back to the gateway (`Http\AnswerInterpreter` applies the table above per
+  operation); it maps any `Throwable` thrown by the PSR-18 client, not only `ClientExceptionInterface`, to
+  `UrssafUnavailable::dueToTransportError()` (a client that breaks its contract is still a transport failure; for a
+  deposit that is an unknown outcome). The PSR-18 exception is **never chained** as `previous`: its message embeds the
+  URI and some clients keep the request, hence the `Authorization` header or the password. Only its class name is kept
+  (`UrssafUnavailable::causeClass()`, and `OutcomeUnknown::afterFailure()`). The same holds for a failed token call.
+  Logging after the request was sent is isolated: a failing logger or clock changes nothing.
+- `Retry-After` is read as seconds (at most 9 digits) or as an IMF-fixdate HTTP date counted from the injected PSR-20
+  `ClockInterface` (never negative); any other value is ignored (`null`).
+- Logs: one `info` line per call (`operation`, `status`, `duration_ms`) and one `warning` per transport failure
+  (`operation`, `duration_ms`, exception class). Neither the token, the password, a URI, a body nor a transport message
+  is ever logged.
