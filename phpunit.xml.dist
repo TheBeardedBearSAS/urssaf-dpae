@@ -22,7 +22,7 @@
         <testsuite name="functional">
             <directory>tests/Functional</directory>
         </testsuite>
-        <!-- Live sandbox tests: never part of the default run, use `make test-contract`. -->
+        <!-- Live contract tests (real hosts, test mode): never part of the default run, use `make test-contract`. -->
         <testsuite name="contract">
             <directory>tests/Contract</directory>
         </testsuite>
