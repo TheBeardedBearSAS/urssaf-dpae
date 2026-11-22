@@ -104,3 +104,16 @@ error collection and no libxml state leaked. Answers from URSSAF still go throug
 Equivalence is tested, not assumed: `DpaeFlowLibxmlOptionsTest` runs a hostile corpus (external file entity, network
 entity, internal entity, external subset) through the options and through `DpaeFlow::fromXml()`. `SafeXmlReader`'s own
 test must run the same corpus with `DpaeFlow::LIBXML_OPTIONS` when the class is written (lot 3): it does not exist yet.
+
+## Amendment 2026-11-22 — readers of the list answers (lot 3)
+
+- `SafeXmlReader` honours the encoding declared by the XML declaration, else the `charset` of the `Content-Type`, but
+  only for UTF-8, ISO-8859-1, ISO-8859-15, Windows-1252 and US-ASCII; any other header charset (UTF-7, BASE64,
+  UUENCODE, HTML-ENTITIES, UTF-16, unknown) is `UnexpectedUrssafResponse`: the header is untrusted and
+  `mb_convert_encoding()` also decodes transfer encodings.
+- `RetoursXmlReader` refuses what it cannot represent instead of skipping it, since a silently lost `retour` would be
+  lost for good once the polling cursor moves on: a `flux` **that holds at least one `retour`** but has no usable `id`
+  is refused (a `flux` without any `retour` is skipped and needs no id), and so is a `retour` without an integer `nature`
+  (an explicit `+` sign is refused), `statut`, `publication` or `production`. Values of a closed list that this version
+  does not know are kept raw.
+- The reader returns the references only; keeping the raw XML of a listing is the role of the HTTP client (lot 4).

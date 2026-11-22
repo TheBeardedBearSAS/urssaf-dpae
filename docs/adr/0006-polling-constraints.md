@@ -70,3 +70,11 @@
 - The 24-hour reading and the time zone are open points (§5.8) checked by the contract tests; a zone error smaller
   than `pollingOverlap()` loses no return. The defaults of the polling tunables are package defaults, not
   specification values.
+
+## Amendment 2026-11-22 — tolerance of `WireDate`
+
+`WireDate::parse()` reads `yyyyMMddHHmmss` and tolerates the separators `-`, `T` / space and `:`, a fraction and an
+explicit offset (`Z`, `+01`, `+01:00`), which wins over the configured zone. It never throws: a value that is not a
+date, an impossible date or a clock hour skipped by a time change gives a null instant and the caller keeps the raw
+string (`publication` / `production` stay available raw on `ReturnReference`). The configured zone defaults to
+`Europe/Paris` and the lower-case `hh` of the Swagger is read as a 24-hour clock (§5.8, open point).

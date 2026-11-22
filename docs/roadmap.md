@@ -46,7 +46,7 @@ Split into lots; each lot is merged green (100 % coverage, MSI 100 %).
 
 ### Lot 2 — declaration model
 
-- `Declaration\Declaration`, `Employer`, `Employee`, `Contract`, `ContractType` (`Cdd|Cdi|Ctt`) and the builder,
+- `Declaration\Declaration`, `Employer`, `Employee`, `Contract`, `ContractType` (`Cdd|Cdi|Ctt`), `DeclarationVocabulary`, `DeclarationRules` and the builder `Wire\DpaeFlowBuilder`,
   validated with the section 3.4 rules of [ADR 0007](adr/0007-declaration-model.md) (notification pattern, `normCode`
   parameter).
 
@@ -80,8 +80,8 @@ Split into lots; each lot is merged green (100 % coverage, MSI 100 %).
 - `Urssaf\Http\XmlApiClient` (gzip request body, `Accept-Encoding: gzip`, decoding of still-gzipped answers,
   `Authorization: DPAELogin jeton=…`, no redirects), status mapping of [ADR 0004](adr/0004-xml-gzip-client.md).
 - `Urssaf\UrssafHttpGateway` + `Urssaf\Wire\*`: `SafeXmlReader` (`LIBXML_NONET`, DOCTYPE refused, declared encoding
-  honoured), `IdentifiantsXmlWriter`, `EnvoiXmlReader`, `RetoursXmlReader`, `DeclarationXmlWriter` +
-  `DeclarationVocabulary` (ISO-8859-1), `yyyyMMddHHmmss` date codec with a configurable time zone.
+  honoured), `IdentifiantsXmlWriter`, `EnvoiXmlReader`, `RetoursXmlReader`, `DpaeFlowBuilder`
+  (ISO-8859-1; `DeclarationVocabulary` and `DeclarationRules` live in the Domain), `yyyyMMddHHmmss` date codec with a configurable time zone.
 - `Urssaf\ApiConfiguration`: four base URIs, `concentrator_port`, `declaration_mode`, `test_indicator.*`,
   `authentication_encoding`, `deposit_content_type`, `max_flow_bytes`, `returns_time_zone`, declaration vocabulary
   and name pattern.

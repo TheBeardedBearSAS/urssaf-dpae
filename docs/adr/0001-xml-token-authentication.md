@@ -112,3 +112,11 @@ Decided while implementing the Domain value objects (lot 1).
 - **`service` range.** `ServiceCode` keeps the Swagger `int32` bound: a value outside `-2147483648..2147483647` is
   refused locally with `service_code.out_of_range` (`InvalidValue`). Any in-range integer is accepted and sent as is,
   as decided above.
+
+## Amendment 2026-11-22 — characters XML 1.0 cannot carry (`IdentifiantsXmlWriter`)
+
+- A character that the declared encoding lacks is written as a numeric character reference (lossless); a character
+  that **XML 1.0 itself cannot represent** (C0 controls other than tab, line feed and carriage return, surrogates,
+  U+FFFE, U+FFFF) is refused with `InvalidValue` `authentication.invalid_character` (parameter `field`), because ext-dom
+  would silently drop it and the password sent would differ from the one typed. The message never carries the value.
+- The shape of the body (root `identifiants`, children in the order of the Swagger properties) stays inferred (§5.4).

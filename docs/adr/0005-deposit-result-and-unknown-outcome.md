@@ -147,3 +147,17 @@ Refines "Result sum type" as implemented in lot 1.
   `DpaeFlow`, cannot be serialized (`Domain\Exception\PayloadNotSerializable`, a `LogicException` implementing
   `UrssafException`).
 - `Deposit\FlowFingerprint` lives in the `Deposit` namespace (not `Declaration`).
+
+## Amendment 2026-11-22 — how `EnvoiXmlReader` reads the answer (lot 3)
+
+- **Reject reasons are `list<string>`**, the raw strings found in the notice, as implemented in
+  `RejectionNotice::of(…, list<string> $reasons)`; the `list<RawRejectReason>` of "Result sum type" is superseded
+  (the shape amendment above already said so; this one aligns the body).
+- The XML form of `envoi` is not published, so these names are **assumed**, not attested: flow id `IdFluxDPAE` (else the
+  `id` of the first `flux`, Swagger), generation date `DateGeneration` / `dateGeneration`, reasons `motif` / `motifRejet` /
+  `MotifRejet`, each as an element or an attribute. They are the defaults of `EnvoiVocabulary`, which a host overrides
+  (`EnvoiXmlReader::receiptWith()` / `rejectionWith()`) once the real names are known. The `publication` of a `retour`
+  is **not** a fallback for the generation date (it is another instant).
+- The declarant SIRET is looked up under `declarant` first (Swagger `envoi_identification.declarant.siret`), then
+  anywhere in the document. Every field is nullable and an unusable value is null, never an error; only an unreadable
+  body (not XML, DOCTYPE, unsupported charset) is `UnexpectedUrssafResponse`. The raw answer is kept as the `RawDocument`.

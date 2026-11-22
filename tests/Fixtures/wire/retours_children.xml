@@ -1,0 +1,32 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!-- inféré: fictif, aucun exemple officiel publié (api-reference §2.3, §5.9). Champs en éléments enfants, noms du Swagger. -->
+<retours>
+    <flux>
+        <id>FICTIF0000000000000001</id>
+        <retour>
+            <publication>20220130083000</publication>
+            <production>20220130082500</production>
+            <nature>10</nature>
+            <statut>OK</statut>
+            <id>0123456789</id>
+            <url>https://telechargement.example.test/telecharger-retour/1.0/FICTIF0000000000000001/0123456789</url>
+        </retour>
+        <retour>
+            <publication>20220130090000</publication>
+            <production>20220130085500</production>
+            <ops>OPS12</ops>
+            <delegataire>DELEG</delegataire>
+            <nature>41</nature>
+            <statut>EN_COURS</statut>
+        </retour>
+    </flux>
+    <flux>
+        <id>FICTIF0000000000000002</id>
+        <retour>
+            <publication>20220131101500</publication>
+            <production>20220131101000</production>
+            <nature>10</nature>
+            <statut>KO</statut>
+        </retour>
+    </flux>
+</retours>

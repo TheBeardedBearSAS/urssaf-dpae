@@ -1,0 +1,13 @@
+<?xml version="1.0" encoding="ISO-8859-1"?>
+<!-- inféré: fictif, aucun exemple officiel publié (api-reference §2.2, §5.9). AEE: IdFluxDPAE, déclarant (siret/nom/prenom), date de génération. -->
+<envoi>
+    <IdFluxDPAE>FICTIF0000000000000001</IdFluxDPAE>
+    <envoi_identification>
+        <declarant>
+            <siret>99999999999999</siret>
+            <nom>Dupond</nom>
+            <prenom>Élodie</prenom>
+        </declarant>
+    </envoi_identification>
+    <DateGeneration>20220130083000</DateGeneration>
+</envoi>

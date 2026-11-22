@@ -24,7 +24,8 @@ to the DSN guide (*DSN_Guide-implementation-API* V3.5, dsn-info.fr, not provided
 (*Dessin d'enregistrement DPAE*, `dsn_bilans_v01r06.xsd`); everything those documents would specify is flagged
 "not published" below.
 
-> Status: specification only. Nothing below is implemented yet; see [roadmap.md](roadmap.md).
+> Status: specification, being implemented. Lots 1 to 3 of the [roadmap](roadmap.md) exist (domain value objects, the
+> declaration model and the XML wire codecs); the HTTP client, the use cases and the bridges do not yet.
 
 > **Source and rights.** The specification, the field names, the codes and the official JSON examples quoted here come
 > from the URSSAF documents listed above and remain URSSAF's property. They are reproduced only so the package can
@@ -435,13 +436,14 @@ section references; this list is the summary.
 4. **Declaration model** ([ADR 0007](adr/0007-declaration-model.md)). Scope of the first version: **phase 1 + the
    declaration model**. Two inputs reach the same `DepositDpae`: a raw XML flow (`DpaeFlow::fromXml`, checked for
    well-formedness, no DOCTYPE, root `FR_DUE_Upload`, mode indicator; deposited verbatim) and a `Declaration` (one
-   `Employer`, one `Employee`, one `Contract`) written by `DeclarationXmlWriter` in ISO-8859-1. The model holds only
+   `Employer`, one `Employee`, one `Contract`) built by `DpaeFlowBuilder` in ISO-8859-1. The model holds only
    the elements of the official example (§2.2), validated with the §3.4 rules that need no unpublished table or
-   algorithm (violation parameter `normCode`). Not modelled (no element published): raison sociale 1 and 2, address 2,
-   trial period. NIR (length 13 or 15) and `Sex.Code` are optional, as in §3.4. Not checked locally: table
+   algorithm (violation parameter `normCode`). The raison sociale 1 is modelled (optional, validated when given) but never
+   written, no element being published; every declaration reports it as a warning. Not modelled (no element published):
+   raison sociale 2, address 2, trial period. The employer SIRET must be 14 digits. NIR (length 13 or 15) and `Sex.Code` are optional, as in §3.4. Not checked locally: table
    memberships (`02`, `03`, `50`), NIR characters, consistency and key (`38`). The
    unpublished vocabulary is configurable (`ContractType` → `CDD` / `CDI` / `CTT` by default, `1` / `2` / `3` by
-   configuration; employee name pattern default `A-Z' .&-`); `Sex.Code`, URSSAF code, health service and birth
+   configuration; employee name pattern default the strict `A-Z' .&-`, so the official `Alain` is rejected locally); `Sex.Code`, URSSAF code, health service and birth
    department stay raw strings.
 5. **Request headers and encoding** ([ADR 0004](adr/0004-xml-gzip-client.md)). Deposit: `Authorization: DPAELogin
    jeton=…`, `Content-Type: text/plain` (configurable), `Content-Encoding: gzip`, body `gzencode()` of the unchanged
@@ -550,6 +552,17 @@ section references; this list is the summary.
    raison sociale is accepted must be checked by a test-mode deposit before real use. The example's first name
    `Alain` breaks the §3.4 set `A-Z' .&-` (pattern configurable). Contract-type wire values default to `CDD` / `CDI` /
    `CTT` (only `CDI` is attested), configurable to `1` / `2` / `3`.
+    Local decisions of the declaration model (lot 2): the raison sociale is optional in the model, validated (≤ 32,
+    §3.4 set, code `05`) when given, **never written**, and every `Declaration` reports it as a warning
+    (`employer.company_name_missing` / `employer.company_name_not_serialized`); the default employee-name pattern is
+    the strict `/^[A-Z' .&-]+$/D`, so the official first name `Alain` is **rejected locally by default**
+    (`employee.first_name_invalid_characters`, code `32`): a host that wants the example to pass uses
+    `DeclarationRules::of("/^[A-Za-z' .&-]+\$/D")` (the golden test and the official fixture do); an invalid optional
+    phone (code `99`) is a warning, URSSAF reporting it as a business result (§3.5); the APE and URSSAF codes are
+    trimmed and mandatory; the employer SIRET must be 14 digits; a 13-character NIR is written without
+    `FR_NNI.NIRKey.Text`, a 15-character one is split 13 + 2 (both inferred); the reference day of "before today" /
+    "within one year" is passed by the caller (no clock in the Domain), the year window being the same calendar day
+    (29 February clamped to 28 February).
 13. **Registration.** Catalogue: restricted access with a subscription form; FAQ: no specific registration for a
     company or third-party declarant, only for concentrators (by e-mail). To confirm what a package user must obtain.
 14. **Error payload** for 400 (deposit) is undocumented; only the HTML pages are shown. The package reads a 400 as
@@ -562,3 +575,20 @@ section references; this list is the summary.
 17. **List 422.** On the list operations 422 is both "paramètres invalides" (§2.3) and the temporary form of the
     polling-constraint 429 (§1.1); the package maps both to the retryable `PollingConstraintViolated` and keeps the
     status (ADR 0006). No `Retry-After` header is published.
+18. **Inferred XML form of `retours`** (fixtures `tests/Fixtures/wire/retours_*.xml` are fictitious): root `retours`,
+    `flux` elements holding `retour` elements, every field (Swagger names) read as a child element or as an attribute
+    under any namespace; a `retour` without an integer `nature` (an optional `+` sign is refused), `statut`,
+    `publication` or `production`, or a `flux` holding a `retour` without a usable `id`, is refused rather than skipped;
+    a `flux` without any `retour` is skipped (`RetoursXmlReader`, ADR 0004). The raw XML of a listing is kept by the
+    HTTP client (lot 4), not by the reader.
+19. **Inferred XML form of `envoi`** (fixtures `envoi_*.xml` are fictitious): flow id `IdFluxDPAE` (else the `id` of the
+    first `flux`), `siret` (Swagger `declarant.siret`, looked up under `declarant` first, then anywhere), generation
+    date `DateGeneration` / `dateGeneration` (the `publication` of a `retour` is not one), reject reasons `motif` /
+    `motifRejet` / `MotifRejet`; element or attribute, each nullable. The inferred names are those of `EnvoiVocabulary`,
+    which a host overrides (`EnvoiXmlReader`, ADR 0005).
+20. **Date reading.** `publication`, `production` and the generation date are read as `yyyyMMddHHmmss` (separators,
+    fraction and an explicit offset tolerated) in `returns_time_zone`; an impossible date or a clock hour skipped by a
+    time change gives a null instant and keeps the raw string (`WireDate`, ADR 0006).
+21. **Authentication body written in UTF-8 by default**: a character the declared encoding lacks is written as a numeric
+    character reference, a character XML 1.0 cannot carry is refused (`IdentifiantsXmlWriter`, same inferred shape as
+    §5.4).

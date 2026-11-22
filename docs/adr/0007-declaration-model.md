@@ -29,7 +29,7 @@
   - `DpaeFlow::fromXml(string $bytes, DeclarationMode $mode)` (raw flow, phase 1): well-formed, no DOCTYPE, root
     `FR_DUE_Upload`, indicator checked against `$mode` ([ADR 0003](0003-declaration-mode-and-simulator-guard.md),
     [ADR 0004](0004-xml-gzip-client.md)); nothing else is validated, the bytes are deposited verbatim; or
-  - `Infrastructure\Urssaf\Wire\DeclarationXmlWriter::write(Declaration, DeclarationMode): DpaeFlow` (built flow).
+  - `Infrastructure\Urssaf\Wire\DpaeFlowBuilder::build(Declaration, DeclarationMode): DpaeFlow` (built flow).
 - Either way the `DpaeFlow` carries its `DeclarationMode`, which cannot be omitted
   ([ADR 0003](0003-declaration-mode-and-simulator-guard.md)). Both go through the same `DepositDpae` use case. Anything the model cannot express is deposited as a raw flow.
 
@@ -42,13 +42,13 @@ the root as in the example).
 
 | Model field | Element of the example | Local rule (source) | Code |
 |---|---|---|---|
-| `Employer::siret` | `rxorg:FR_Organization.SIRET.Identifier` | mandatory (§3.4); 14 digits (inferred from the example, Swagger `siret` 14) | — |
+| `Employer::siret` | `rxorg:FR_Organization.SIRET.Identifier` | mandatory (§3.4); 14 digits, checked by `Employer::validate()` (inferred from the example; `Siret` itself only checks 14 characters) | — |
 | `Employer::apeCode` | `rxorg:FR_Organization.APE.Code` | mandatory, length 4 or 5 (§3.4) | `03` |
 | `Employer::urssafCode` | `FR_Employer.URSSAF.Code` | mandatory, length < 4 (§3.4) | `02` |
 | `Employer::street` | `rxpadr:FR_PostalAddress.StreetDesignation.Text` | mandatory, ≤ 32, employer set (§3.4 "address 1") | `06` |
 | `Employer::town` | `rxpadr:FR_PostalAddress.Town.Text` | mandatory, ≤ 32, employer set (§3.4 "commune") | `08` |
 | `Employer::postalCode` | `rxpadr:FR_PostalAddress.Postal.Code` | mandatory, 5 digits, not `00000` (§3.4) | `07` |
-| `Employer::phone` (optional) | `rxphadr:FR_PhoneAddress.PhoneNumber.Text` | 10 digits (§3.4) | `99` |
+| `Employer::phone` (optional) | `rxphadr:FR_PhoneAddress.PhoneNumber.Text` | 10 digits (§3.4); a **warning**, not an error (see the 2026-11-22 amendment) | `99` |
 | `Employee::surname` | `rxpers:FR_PersonIdentity.Surname.Text` | mandatory, ≤ 32, employee name set (§3.4) | `31` |
 | `Employee::firstName` | `rxpers:FR_PersonIdentity.ChristianName.Text` | mandatory, ≤ 32, employee name set (§3.4) | `32` |
 | `Employee::sexCode` (optional) | `rxpers:FR_PersonIdentity.Sex.Code` | none in §3.4; raw string, vocabulary not published | — |
@@ -73,15 +73,17 @@ employer set is `a-zA-Z0-9éèêë âàä öô ûü îï ç°² !#$%&'()*+,-./:;
   date and NIR key validity (`38`; the official example `1000000000000` / `99` would fail a local key check). The
   hour 0–23 / minute 0–59 rule of `35` holds by construction (`Contract::start` is a `DateTimeImmutable`). URSSAF
   applies them and reports them in the returns.
-- **Not modelled** (no element in the example): raison sociale 1 and 2, address 2, trial period, end-of-contract time
-  (set to `23:59:59` by URSSAF, §3.4). Raison sociale 1 is mandatory under §3.4 (code `05`): whether a built flow
+- **Not written** (no element in the example): raison sociale 1 is **modelled** (optional, validated when given) but
+  never written, and every `Declaration` carries a warning about it (`employer.company_name_missing` /
+  `employer.company_name_not_serialized`). **Not modelled**: raison sociale 2, address 2, trial period, end-of-contract
+  time (set to `23:59:59` by URSSAF, §3.4). Raison sociale 1 is mandatory under §3.4 (code `05`): whether a built flow
   without it is accepted is an open point (§5.12) to be settled by a test-mode contract deposit **before** the builder
   is used in real mode. Until then the README states the limit and the raw-flow deposit remains the way to send any
   element outside the model. No free-form extension element is offered: element names would be invented.
 
 ### Unpublished vocabulary: preserved and configurable
 
-- `Infrastructure\Urssaf\Wire\DeclarationVocabulary` maps the enums of the model to wire values. Defaults:
+- `Domain\Declaration\DeclarationVocabulary` maps the enums of the model to wire values. Defaults:
   `ContractType::Cdi` → `CDI` (the example), `Cdd` → `CDD`, `Ctt` → `CTT` (the same mnemonic form, **inferred**);
   the norm-control form `1` / `2` / `3` is one configuration away (`declaration_vocabulary.contract_type`).
 - Values with no published list (`sexCode`, `urssafCode`, `healthService`, `birthDepartment`) are raw strings checked
@@ -108,5 +110,23 @@ employer set is `a-zA-Z0-9éèêë âàä öô ûü îï ç°² !#$%&'()*+,-./:;
 `fromXml($bytes, $mode)`: the indicator is checked **inside the Domain**, against the indicator expected for `$mode`
 ([ADR 0003](0003-declaration-mode-and-simulator-guard.md) amendment). A flat flow is refused with
 `flow.format_not_supported`, an indicator that is missing or does not match with `flow.declaration_mode_mismatch`.
-`DpaeFlow::declaredIndicator()` is removed (nothing is left for the application layer to check). `DeclarationXmlWriter`
+`DpaeFlow::declaredIndicator()` is removed (nothing is left for the application layer to check). `DpaeFlowBuilder`
 (built flows) writes the indicator from the same `TestIndicators`, so a built flow passes the same check.
+
+## Amendment 2026-11-22 — lot 2 implementation names and defaults
+
+- The builder is `Infrastructure\Urssaf\Wire\DpaeFlowBuilder` (`new DpaeFlowBuilder(TestIndicators, DeclarationVocabulary)`,
+  `build(Declaration, DeclarationMode): DpaeFlow`), which replaces `DeclarationXmlWriter::write()`. A value that
+  ISO-8859-1 cannot hold is refused with `declaration.value_not_encodable`.
+- `DeclarationVocabulary` (contract type wire values) and `DeclarationRules` (employee name pattern) are Domain value
+  objects, so that the validation and the builder share them. The name pattern default is the **strict §3.4 set**
+  (`/^[A-Z' .&-]+$/D`): the official `Alain` is therefore rejected locally by default. The golden test and the official
+  fixture use the permissive `DeclarationRules::of("/^[A-Za-z' .&-]+\$/D")` explicitly.
+- `Employer`: an invalid optional phone is a warning (code `99` is generic and URSSAF reports it as a business result);
+  the APE and URSSAF codes are trimmed and mandatory (`employer.ape_code_empty`, `employer.urssaf_code_empty`); the
+  SIRET must be 14 digits (`employer.siret_invalid_format`). `DpaeFlowBuilder` refuses C0, DEL and C1 control
+  characters as well as everything above U+00FF (`declaration.value_not_encodable`). `Contract::validate()` compares the
+  year window on the same calendar day (29 February clamped to 28 February).
+- `Declaration::of(Employer, Employee, Contract, DeclarationRules, DateTimeImmutable $today)` validates and throws
+  `ValidationFailed`; `Declaration::validate()` returns the `ValidationResult` without throwing. Warnings (raison
+  sociale, [api-reference.md](../api-reference.md) §5.12) are kept in `Declaration::warnings()`.

@@ -1,0 +1,14 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!-- inféré: fictif, aucun exemple officiel publié (api-reference §2.2, §5.9). Avis de rejet: mêmes champs que l'AEE plus les motifs. -->
+<envoi>
+    <IdFluxDPAE>FICTIF0000000000000002</IdFluxDPAE>
+    <envoi_identification>
+        <declarant siret="99999999999999" nom="Dupond" prenom="Alain"/>
+    </envoi_identification>
+    <DateGeneration>20220131101500</DateGeneration>
+    <motifs>
+        <motif>Version de la norme inconnue</motif>
+        <motif>  </motif>
+        <motifRejet>SIRET employeur absent</motifRejet>
+    </motifs>
+</envoi>
