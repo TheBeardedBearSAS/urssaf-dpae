@@ -9,6 +9,18 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ### Added
 
+- Symfony bridge (lot 6, ADR 0003, 0009, `symfony/*` stay `require-dev` + `suggest`, floors `^6.4.3 || ^7.4 || ^8.0`):
+  `UrssafDpaeBundle` (alias `urssaf_dpae`), configuration validated at build time (credentials through `%env()%`, service
+  code `25` / `98` / any integer kept, four overridable base URIs and the concentrator port, `declaration_mode` ceiling
+  defaulting to `test`, `gateway.simulated` refused with `real` at build time and, through `SimulatedGatewayFactory`, at
+  runtime), an HTTP client with `max_redirects: 0`, console commands `urssaf:dpae:{check,deposit,returns,download,sync-returns
+  (alias sync),reconcile,relay-outbox,purge-outbox}`, Messenger messages and handlers, operation locks
+  `urssaf_dpae.<operation>.<scope>`, the Scheduler schedule `urssaf_dpae`, installation checks, en / fr translations, the
+  Flex recipe `recipe/thebeardedbear/urssaf-dpae/0.1` with `bin/build-flex-endpoint` and `make flex-endpoint`, and
+  [docs/symfony.md](docs/symfony.md). New application pieces: the `IntegrationEventSink` port, `RelayOutbox` and `PurgeOutbox`.
+  The token stays in memory (no cache pool shipped, ADR 0001). Credentials are built per tenant on demand; lock names escape
+  `.` and `%`; `download` writes `0600` and needs `--force` to overwrite; CI job `tests (PHP 8.4, Symfony 8)`
+  (`bin/require-symfony8`, `doctrine/doctrine-bundle` `^2.19 || ^3.0`).
 - Doctrine bridge (lot 7, ADR 0008, 0009, optional: `doctrine/orm`, `doctrine/dbal`, `doctrine/doctrine-bundle` stay `require-dev` + `suggest`, with
   the `conflict` floors): `Bridge\Doctrine\{DoctrineDepositRepository, DoctrineReturnRepository, DoctrineReturnContentStore,
   DoctrineSyncCursorRepository, DoctrineOutbox, DoctrineTransactionManager, DoctrineDepositFlowStore, DoctrineIntegration}`.
@@ -57,7 +69,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
   CI job `dco` (`bin/check-dco`).
 - Symfony `^8.0` is supported: the Symfony components of the `require-dev` and `conflict` floors now accept `^8.0`.
 - CI: the `contract` job reads the `URSSAF_DPAE_*` secrets and variable (`URSSAF_DPAE_SIRET`, `URSSAF_DPAE_NOM`,
-  `URSSAF_DPAE_PRENOM`, `URSSAF_DPAE_PASSWORD`, `URSSAF_DPAE_SERVICE`, optional `URSSAF_DPAE_BASE_URI`).
+  `URSSAF_DPAE_PRENOM`, `URSSAF_DPAE_PASSWORD`, `URSSAF_DPAE_SERVICE`, optional host overrides `URSSAF_DPAE_{AUTHENTICATION,DEPOSIT,CONSULTATION,DOWNLOAD}_URI`, the names of the Flex recipe, ADR 0009).
 - Project governance: `CODE_OF_CONDUCT.md` (Contributor Covenant 2.1), `GOVERNANCE.md` (decision model, roles and
   responsibilities), `ROADMAP.md`, and the code review requirements and first-contribution tasks in `CONTRIBUTING.md`.
 - Security assurance case (threat model, trust boundaries, secure design principles, countered weaknesses) in

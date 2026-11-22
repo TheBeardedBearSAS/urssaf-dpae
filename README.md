@@ -22,8 +22,8 @@ Developed and maintained by [The Bearded Bear](https://the-bearded-bear.com).
 
 > 🚧 **Work in progress.** The domain model, the HTTP gateway and the application layer (deposit, return
 > synchronisation, download, reconciliation of a lost answer) are implemented and usable without a framework, see the
-> quick start below. The Doctrine bridge (durable persistence, [docs/doctrine.md](docs/doctrine.md)) is implemented; the
-> Symfony bridge follows, see [docs/roadmap.md](docs/roadmap.md).
+> quick start below. The Doctrine bridge (durable persistence, [docs/doctrine.md](docs/doctrine.md)) and the Symfony bundle
+> ([docs/symfony.md](docs/symfony.md)) are implemented; see [docs/roadmap.md](docs/roadmap.md) for what is deferred.
 
 ## Scope
 
@@ -98,9 +98,24 @@ migration shipped, retention and encryption of the personal data are yours): bui
 `Doctrine*` repositories of one entity manager and give it to `UrssafDpaeBuilder::withPersistence()`. In
 your tests, `UrssafDpaeBuilder::withGateway()` takes a `Testing\SimulatedDpaeGateway`, refused in a `real` installation.
 
+## Symfony
+
+```yaml
+# config/packages/urssaf_dpae.yaml (copied by the Flex recipe in recipe/)
+urssaf_dpae:
+    declaration_mode: '%env(URSSAF_DPAE_DECLARATION_MODE)%'   # test by default, never real by default
+    credentials:
+        default: { siret: '%env(URSSAF_DPAE_SIRET)%', nom: '%env(URSSAF_DPAE_NOM)%', prenom: '%env(URSSAF_DPAE_PRENOM)%', password: '%env(URSSAF_DPAE_PASSWORD)%', service: '%env(int:URSSAF_DPAE_SERVICE)%' }
+```
+
+Console commands `urssaf:dpae:check`, `deposit`, `returns`, `download`, `sync-returns`, `reconcile`, `relay-outbox` and
+`purge-outbox`, Messenger handlers, locks, a Scheduler schedule and a Flex recipe, all prefixed so that the URSSAF
+packages coexist. Details: [docs/symfony.md](docs/symfony.md).
+
 ## Documentation
 
 - [docs/api-reference.md](docs/api-reference.md) — technical reference (single source of truth for the package).
+- [docs/symfony.md](docs/symfony.md) — Symfony bundle: configuration, commands, Messenger, locks, Scheduler, Flex recipe.
 - [docs/doctrine.md](docs/doctrine.md) — Doctrine persistence: schema, concurrency, transactions, personal data (GDPR).
 - [docs/roadmap.md](docs/roadmap.md) — planned architecture and order of work.
 - [docs/openapi/](docs/openapi/) — official OpenAPI contract(s) from the URSSAF API portal.

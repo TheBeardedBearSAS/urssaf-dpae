@@ -662,3 +662,8 @@ section references; this list is the summary.
     unique index and is not supported). The retention period of the copy of the host (the specification publishes only the
     3 months of URSSAF and the 13 months of the consultation service, §1.2) is the host's: the package only offers the
     `delete…Before()` building blocks.
+25. **Symfony bridge** (lot 6, [docs/symfony.md](symfony.md), [ADR 0009](adr/0009-coexistence.md) amendment). Delivered; the outbox
+    relay and purge and the `IntegrationEventSink` port are now delivered too. Still deferred: `DownloadDueReturns`,
+    `ResolveDepositOutcome`, `RequeueInvalidCredentials`, `GetWorkflowOverview` (so no `status`, `resolve`, `requeue`,
+    `download-returns` command). Symfony 8 is exercised in CI (PHP 8.4, Symfony 8.1, DoctrineBundle 3.4: unit and functional suites,
+    ADR 0009); the static analysis and the QA tools stay on the locked PHP 8.2 dependencies, as some pin `symfony/console` below 8.

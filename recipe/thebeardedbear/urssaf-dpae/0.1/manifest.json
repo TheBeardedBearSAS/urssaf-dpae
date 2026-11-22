@@ -1,0 +1,22 @@
+{
+    "bundles": {
+        "TheBeardedBear\\UrssafDpae\\Bridge\\Symfony\\UrssafDpaeBundle": ["all"]
+    },
+    "copy-from-recipe": {
+        "config/": "%CONFIG_DIR%/"
+    },
+    "env": {
+        "#1": "URSSAF API DPAE: declaration mode (test | real: the highest mode this installation may deposit) and the declarant credentials (Urssaf en ligne subscriber)",
+        "URSSAF_DPAE_DECLARATION_MODE": "test",
+        "URSSAF_DPAE_SIRET": "",
+        "URSSAF_DPAE_NOM": "",
+        "URSSAF_DPAE_PRENOM": "",
+        "URSSAF_DPAE_PASSWORD": "",
+        "URSSAF_DPAE_SERVICE": "25",
+        "#2": "Optional host overrides (a mock server, a gateway): leave empty for the published URSSAF hosts",
+        "URSSAF_DPAE_AUTHENTICATION_URI": "",
+        "URSSAF_DPAE_DEPOSIT_URI": "",
+        "URSSAF_DPAE_CONSULTATION_URI": "",
+        "URSSAF_DPAE_DOWNLOAD_URI": ""
+    }
+}

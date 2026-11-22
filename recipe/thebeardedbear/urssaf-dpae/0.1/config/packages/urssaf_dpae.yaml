@@ -1,0 +1,52 @@
+# URSSAF "API DPAE": every option is described in the docs/symfony.md file of the package.
+urssaf_dpae:
+    # The highest mode this installation may deposit: test | real. "real" declares a hire for real: never the default.
+    declaration_mode: '%env(URSSAF_DPAE_DECLARATION_MODE)%'
+
+    # One entry per declarant (tenant); or "credentials_provider: <service id>" to read them from your database.
+    # service: 25 (direct declarant), 98 (concentrator), or any other integer, kept as is.
+    credentials:
+        default:
+            siret: '%env(URSSAF_DPAE_SIRET)%'
+            nom: '%env(URSSAF_DPAE_NOM)%'
+            prenom: '%env(URSSAF_DPAE_PRENOM)%'
+            password: '%env(URSSAF_DPAE_PASSWORD)%'
+            service: '%env(int:URSSAF_DPAE_SERVICE)%'
+
+    # Base URIs: empty keeps the published hosts (the authentication one can be overridden too).
+    hosts:
+        authentication: '%env(default::URSSAF_DPAE_AUTHENTICATION_URI)%'
+        deposit: '%env(default::URSSAF_DPAE_DEPOSIT_URI)%'
+        consultation: '%env(default::URSSAF_DPAE_CONSULTATION_URI)%'
+        download: '%env(default::URSSAF_DPAE_DOWNLOAD_URI)%'
+
+    # The token is a credential kept in the memory of each process (ADR 0001): the package ships no cache pool for it
+    # ("urssaf_dpae.token_cache" is only a reserved name). Provide your own TokenStore only if you must:
+    # token_store: { service: App\Urssaf\MyTokenStore }
+
+    # Persistence: Doctrine by default (when doctrine/orm is installed). Use a DEDICATED entity manager (docs/doctrine.md),
+    # then generate the tables with doctrine:migrations:diff. Without Doctrine, "in_memory" loses every record at the end of
+    # the process: give your repositories ("custom" driver), see docs/symfony.md.
+    # persistence: { driver: doctrine, entity_manager: urssaf_dpae }
+
+    # Integration events for your application (urssaf.dpae.*), relayed by urssaf:dpae:relay-outbox.
+    # outbox: { enabled: true, sink: messenger }
+
+    # Messenger handlers of the messages of the package (deposit, synchronise returns, reconcile).
+    # messenger: { enabled: true }
+
+    # Crons of the package as a Symfony Scheduler schedule ("messenger:consume scheduler_urssaf_dpae").
+    # scheduler: { enabled: true }
+
+when@test:
+    urssaf_dpae:
+        # The in-memory URSSAF of the package: nothing is sent to URSSAF (refused with declaration_mode: real).
+        gateway: { simulated: true }
+        # Fictitious declarant: the test environment needs no URSSAF_DPAE_* variable (nothing is sent anywhere).
+        credentials:
+            default:
+                siret: '12345678901234'
+                nom: 'Test'
+                prenom: 'Test'
+                password: 'not-a-real-password'
+                service: 25

@@ -135,6 +135,20 @@ jobs:
           dependencies: ${{ matrix.dependencies }}
       - run: vendor/bin/phpunit --testsuite=unit,functional
 
+  # Symfony 8 (needs PHP >= 8.4 and DoctrineBundle 3): the QA tools that pin symfony/console < 8 are dropped for this job
+  # (bin/require-symfony8), the unit and functional suites run against the Symfony 8 components.
+  tests-symfony8:
+    name: tests (PHP 8.4, Symfony 8)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: ./.github/actions/setup
+        with:
+          php-version: '8.4'
+          dependencies: symfony8
+      - run: composer show symfony/framework-bundle doctrine/doctrine-bundle | grep -E '^(name|versions)'
+      - run: vendor/bin/phpunit --testsuite=unit,functional
+
   # 100 % lines / methods / classes over the whole of src (unit + functional suites).
   coverage:
     name: coverage
@@ -284,9 +298,25 @@ jobs:
             tools/phpbench/vendor/bin/phpbench run --report=urssaf --store --tag=current
           fi
 
+  flex-endpoint:
+    # Builds the Flex endpoint of the recipe (recipe/) to check it.
+    name: flex endpoint
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: ./.github/actions/setup
+        with:
+          php-version: '8.4'
+      - run: bin/build-flex-endpoint var/flex-endpoint https://flex.invalid/urssaf-dpae
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: flex-endpoint
+          path: var/flex-endpoint
+
   # Manual only: Actions > CI > Run workflow > "contract". Repository secrets URSSAF_DPAE_SIRET, URSSAF_DPAE_NOM,
-  # URSSAF_DPAE_PRENOM, URSSAF_DPAE_PASSWORD and URSSAF_DPAE_SERVICE are required; URSSAF_DPAE_BASE_URI is an optional
-  # repository variable.
+  # URSSAF_DPAE_PRENOM, URSSAF_DPAE_PASSWORD and URSSAF_DPAE_SERVICE are required; URSSAF_DPAE_AUTHENTICATION_URI,
+  # URSSAF_DPAE_DEPOSIT_URI, URSSAF_DPAE_CONSULTATION_URI and URSSAF_DPAE_DOWNLOAD_URI (the host overrides of the recipe,
+  # ADR 0002 and 0009) are optional repository variables.
   contract:
     name: contract (URSSAF DPAE)
     if: github.event_name == 'workflow_dispatch' && inputs.contract
@@ -305,4 +335,7 @@ jobs:
           URSSAF_DPAE_PRENOM: ${{ secrets.URSSAF_DPAE_PRENOM }}
           URSSAF_DPAE_PASSWORD: ${{ secrets.URSSAF_DPAE_PASSWORD }}
           URSSAF_DPAE_SERVICE: ${{ secrets.URSSAF_DPAE_SERVICE }}
-          URSSAF_DPAE_BASE_URI: ${{ vars.URSSAF_DPAE_BASE_URI }}
+          URSSAF_DPAE_AUTHENTICATION_URI: ${{ vars.URSSAF_DPAE_AUTHENTICATION_URI }}
+          URSSAF_DPAE_DEPOSIT_URI: ${{ vars.URSSAF_DPAE_DEPOSIT_URI }}
+          URSSAF_DPAE_CONSULTATION_URI: ${{ vars.URSSAF_DPAE_CONSULTATION_URI }}
+          URSSAF_DPAE_DOWNLOAD_URI: ${{ vars.URSSAF_DPAE_DOWNLOAD_URI }}

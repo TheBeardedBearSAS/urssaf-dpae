@@ -104,11 +104,12 @@ Split into lots; each lot is merged green (100 % coverage, MSI 100 %).
 ## Bridges
 
 - Symfony bundle `UrssafDpaeBundle` (alias `urssaf_dpae`): configuration validated at build time, HTTP client with
-  `max_redirects: 0`, the container wiring of `SimulatedGatewayFactory` (refuses the resolved `real` mode; the class itself
-  ships in lot 5) with its functional test modelled on the CESU package, console commands `urssaf:dpae:*`
-  (`check`, `status`, `deposit <file> --mode`, `sync-returns`, `download-returns`, `reconcile`, `resolve`, `requeue`,
-  `relay-outbox`), Messenger, locks and Scheduler prefixed `urssaf_dpae`, en / fr translations, Flex recipe in
-  `recipe/` ([ADR 0009](adr/0009-coexistence.md)).
+  `max_redirects: 0`, the container wiring of `SimulatedGatewayFactory` (refuses the resolved `real` mode) with its
+  functional test modelled on the CESU package, console commands `urssaf:dpae:*` (delivered: `check`, `deposit`, `returns`,
+  `download`, `sync-returns`, `reconcile`, `relay-outbox`, `purge-outbox`; `status`, `resolve`, `requeue` and
+  `download-returns` are deferred until their use cases exist, see the amendment "the Symfony bridge as implemented (lot 6)"
+  of [ADR 0009](adr/0009-coexistence.md)), Messenger, locks and Scheduler prefixed `urssaf_dpae`, en / fr translations, Flex
+  recipe in `recipe/` ([ADR 0009](adr/0009-coexistence.md), [docs/symfony.md](symfony.md)).
 - Doctrine bridge ([ADR 0008](adr/0008-doctrine-persistence.md)): required for the full lifecycle, still an optional
   Composer dependency. Tables `urssaf_dpae_deposits`, `urssaf_dpae_deposit_flows` (opt-in), `urssaf_dpae_returns`,
   `urssaf_dpae_return_contents`, `urssaf_dpae_sync_cursors`, `urssaf_dpae_outbox`; DBAL types `urssaf_dpae_*`;
@@ -143,6 +144,6 @@ the API itself. Symfony components in `require-dev` `^6.4.3 || ^7.4 || ^8.0`, Sy
 3. Wire writers/readers + fixtures (`SafeXmlReader`, identifiants, envoi, retours, declaration writer).
 4. HTTP gateway (authentication, deposit, lists, download, status mapping, 422 / 429).
 5. Application commands/queries (deposit, synchronisation, download, reconciliation; the five main ones are done in lot 5, see "Already in place" for the rest).
-6. Symfony bridge and Flex recipe.
+6. Symfony bridge and Flex recipe (delivered, lot 6: [symfony.md](symfony.md), ADR 0009 amendment). `RelayOutbox` / `PurgeOutbox` and the `IntegrationEventSink` port shipped with it; still deferred: `DownloadDueReturns`, `ResolveDepositOutcome`, `RequeueInvalidCredentials`, `GetWorkflowOverview` / status.
 7. Doctrine bridge.
 8. Contract tests, then remove the settled open points from `api-reference.md` §5 and amend the ADRs concerned.

@@ -91,6 +91,7 @@ Inside the package, Deptrac enforces the layers that separate these zones (`dept
 | **Error pages not interpreted** (CWE-209). Error bodies are Apache HTML pages (401, 404, 422). | The HTML body is ignored: the exception is built from the status code and the `WWW-Authenticate` realm only, never from the body, and the body is never copied into a message or a log. Only the deposit `422` carries a rejection notice (XML), which goes through the strict XML parser above. | To implement |
 | **SSRF and host confusion** (A10, CWE-918). Four hosts, with port `8443` for concentrators. | The four base URIs are operator configuration with constant paths, validated as absolute URLs at configuration time (plain `http://` allowed only for a local mock, never against the production hosts); the `<url>` tag of the return lists is parsed as data and followed only if its origin (scheme, host, port) matches the configured download base URI ([ADR 0002](../adr/0002-hosts-per-service.md)). | To implement |
 | **Replay and duplicate declarations** (A04). The API has no "annule et remplace"; duplicates are handled by URSSAF business control (code `98`). | A deposit is not retried automatically after a timeout; the `mayHaveReachedUrssaf()` signal lets the host reconcile through the return list. | To implement |
+| **Personal data in the Messenger failure transport** (A02, CWE-312, CWE-532). The deposit message carries the whole flow (base 64), and Messenger copies a failed message, payload included, to the `failure_transport`. | The package never logs the payload and the handlers keep it out of their exception messages (violation codes only). The copy in the failure transport is the host's: [docs/symfony.md](../symfony.md) requires the same protection as the database, a dedicated or synchronous transport for the deposit, and a purge of the failed messages (`messenger:failed:remove`, short retention); see assumption 3 of section 7. | Documented, host responsibility |
 | **Return purge** (A04). Returns are purged by URSSAF after 3 months. | The Doctrine bridge (lot 7) stores returns and their documents so the legal proof outlives the purge, with no local retention period (the host's purge jobs delete them); a missing return (404), or a downloaded return whose stored document was purged, is a typed "gone" outcome, not a generic failure. | Delivered (lot 7), functional tests on SQLite |
 | Insecure deserialisation (A08, CWE-502) | `unserialize` is never used on data from URSSAF; XML is read into typed value objects. | By design, checked by review and PHPStan |
 | Hard-coded credentials (CWE-798) | None in the repository; fixtures use fictitious values; the contributing rules forbid real data; GitHub secret scanning with push protection. | In place |
@@ -120,9 +121,10 @@ The assurance above holds if the host application:
    configuration ends up in the compiled container), and restricts who can read it;
 2. provides a PSR-18 client that verifies TLS certificates, with safe redirect behaviour, and does not override the
    hosts with a non-HTTPS URL outside tests;
-3. protects its database and file storage (access control, encryption at rest, optionally column encryption of the NIR
-   through a custom DBAL type), bounds the retention of backups, and applies a retention and erasure policy to the
-   personal data and the returns it stores;
+3. protects its database, file storage and message transports (access control, encryption at rest, optionally column
+   encryption of the NIR through a custom DBAL type; the Messenger transport of the deposit and its failure transport hold
+   the flow), bounds the retention of backups, and applies a retention and erasure policy to the personal data, the
+   returns and the failed messages it stores;
 4. does not log request or response bodies at its own HTTP-client level, and does not put personal data in the
    messages of exceptions raised by its own listeners.
 
