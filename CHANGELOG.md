@@ -118,3 +118,9 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 - The package is open source under the MIT license (previously proprietary). Added `CONTRIBUTING.md` and
   `SECURITY.md`, and a notice in the README stating that the package is unofficial and not affiliated with URSSAF.
+
+### Fixed
+
+- `ListingWindows::split()` always terminates: the loop exits on the window reaching the end of the period instead of testing the start
+  against it, so a faulty comparison (e.g. an Infection mutant) gives wrong windows, caught by the tests, instead of an endless loop
+  that surfaced as a flaky timed-out mutant in CI.

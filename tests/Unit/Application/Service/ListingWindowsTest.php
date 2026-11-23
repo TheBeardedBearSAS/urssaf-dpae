@@ -56,4 +56,21 @@ final class ListingWindowsTest extends TestCase
             '2022-02-01T12:00:00Z/2022-02-01T12:30:00Z',
         ], self::iso($windows));
     }
+
+    public function testAPeriodEndingExactlyOnALimitBoundaryHasNoTrailingRange(): void
+    {
+        $windows = ListingWindows::split(Samples::at('2022-02-01T10:00:00Z'), Samples::at('2022-02-01T12:00:00Z'), new DateInterval('PT1H'));
+
+        static::assertSame([
+            '2022-02-01T10:00:00Z/2022-02-01T11:00:00Z',
+            '2022-02-01T11:00:00Z/2022-02-01T12:00:00Z',
+        ], self::iso($windows));
+    }
+
+    public function testAPeriodShorterThanTheLimitIsOneRange(): void
+    {
+        $windows = ListingWindows::split(Samples::at('2022-02-01T10:00:00Z'), Samples::at('2022-02-01T10:30:00Z'), new DateInterval('PT1H'));
+
+        static::assertSame(['2022-02-01T10:00:00Z/2022-02-01T10:30:00Z'], self::iso($windows));
+    }
 }
