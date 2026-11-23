@@ -1,0 +1,19 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+  This file is part of thebeardedbear/urssaf-dpae.
+
+  Copyright (c) TheBeardedBear and the urssaf-dpae contributors
+
+  SPDX-License-Identifier: MIT
+-->
+<doctrine-mapping xmlns="http://doctrine-project.org/schemas/orm/doctrine-mapping"
+                  xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+                  xsi:schemaLocation="http://doctrine-project.org/schemas/orm/doctrine-mapping https://www.doctrine-project.org/schemas/orm/doctrine-mapping.xsd">
+    <!-- The deposited flow, gzip-compressed, 1:1 with the deposit. Only written for a host that keeps flows. -->
+    <entity name="TheBeardedBear\UrssafDpae\Bridge\Doctrine\Entity\DepositFlowRecord" table="urssaf_dpae_deposit_flows" read-only="true">
+        <id name="depositId" type="urssaf_dpae_deposit_id" column="deposit_id" length="64">
+            <generator strategy="NONE"/>
+        </id>
+        <field name="flow" type="urssaf_dpae_bytes" column="flow"/>
+    </entity>
+</doctrine-mapping>

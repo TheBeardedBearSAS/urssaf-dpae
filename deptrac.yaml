@@ -1,3 +1,9 @@
+# This file is part of thebeardedbear/urssaf-dpae.
+#
+# Copyright (c) TheBeardedBear and the urssaf-dpae contributors
+#
+# SPDX-License-Identifier: MIT
+
 deptrac:
   paths:
     - ./src
@@ -8,6 +14,10 @@ deptrac:
       collectors:
         - type: directory
           value: src/Domain/.*
+    - name: Contract
+      collectors:
+        - type: directory
+          value: src/Contract/.*
     - name: Application
       collectors:
         - type: directory
@@ -16,6 +26,14 @@ deptrac:
       collectors:
         - type: directory
           value: src/Infrastructure/.*
+    - name: Testing
+      collectors:
+        - type: directory
+          value: src/Testing/.*
+    - name: Standalone
+      collectors:
+        - type: directory
+          value: src/Standalone/.*
     - name: SymfonyBridge
       collectors:
         - type: directory
@@ -38,22 +56,44 @@ deptrac:
           value: ^Doctrine\\
   ruleset:
     Domain: ~
+    Contract: ~
     Application:
       - Domain
+      - Contract
     Infrastructure:
       - Application
       - Domain
+      - Contract
       - Psr
     DoctrineBridge:
       - Domain
+      - Contract
       - Application
       - Infrastructure
       - Doctrine
       - Psr
-    SymfonyBridge:
+    # The simulator (ADR 0003) is in-memory URSSAF: it implements the application ports on the domain, and nothing else
+    # (no Infrastructure, no Contract).
+    Testing:
       - Domain
       - Application
+    # The standalone entry point has no Symfony (ADR 0000 section 1); the Doctrine bridge is its opt-in persistence.
+    Standalone:
+      - Domain
+      - Contract
+      - Application
       - Infrastructure
+      - DoctrineBridge
+      - Doctrine
+      - Psr
+    # The bridge depends on Testing for one reason: the container factory of the simulated gateway (`gateway.simulated`,
+    # tests of the host application, ADR 0003 and 0009) instantiates SimulatedDpaeGateway.
+    SymfonyBridge:
+      - Domain
+      - Contract
+      - Application
+      - Infrastructure
+      - Testing
       - DoctrineBridge
       - Symfony
       - Doctrine

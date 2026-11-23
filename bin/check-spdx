@@ -1,0 +1,33 @@
+#!/bin/sh
+# This file is part of thebeardedbear/urssaf-dpae.
+#
+# Copyright (c) TheBeardedBear and the urssaf-dpae contributors
+#
+# SPDX-License-Identifier: MIT
+#
+# Fails when a source file that can hold comments lacks the "SPDX-License-Identifier: MIT" line.
+# PHP files are fixed by PHP CS Fixer (header_comment); this guard covers them too, plus XML, YAML, shell, Makefile and
+# Dockerfile files, and the tool configurations at the root. Excluded: recipe/**/urssaf_dpae.yaml (copied into the
+# host application by Flex, so it carries no header, like the reference package), tests/Fixtures/wire/ (official URSSAF examples reproduced verbatim, not covered by the MIT licence, see
+# docs/api-reference.md), vendor/, var/, JSON and lock files (no comments).
+# Usage: sh bin/check-spdx
+
+set -eu
+
+missing=0
+files=$(find src tests bin docker .github -type f \
+        \( -name '*.php' -o -name '*.xml' -o -name '*.yaml' -o -name '*.yml' -o -name '*.sh' -o -name 'Dockerfile' \
+           -o -path 'bin/*' \) \
+        -not -path '*/vendor/*' -not -path '*/var/*' -not -path 'tests/Fixtures/wire/*' | sort
+    printf '%s\n' Makefile docker-compose.yml rector.php composer-unused.php .php-cs-fixer.dist.php \
+        phpstan-constants.php phpstan.neon.dist deptrac.yaml mago.toml phpunit.xml.dist infection.json5 \
+        sonar-project.properties .hadolint.yaml)
+
+for file in $files; do
+    if ! grep -q 'SPDX-License-Identifier: MIT' "$file"; then
+        echo "Missing SPDX-License-Identifier: $file"
+        missing=1
+    fi
+done
+
+exit "$missing"

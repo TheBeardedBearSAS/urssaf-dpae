@@ -1,7 +1,15 @@
 <?xml version="1.0" encoding="UTF-8"?>
+<!--
+  This file is part of thebeardedbear/urssaf-dpae.
+
+  Copyright (c) TheBeardedBear and the urssaf-dpae contributors
+
+  SPDX-License-Identifier: MIT
+-->
 <phpunit xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
          xsi:noNamespaceSchemaLocation="vendor/phpunit/phpunit/phpunit.xsd"
          bootstrap="tests/bootstrap.php"
+         defaultTestSuite="unit,functional"
          cacheDirectory="var/phpunit"
          colors="true"
          executionOrder="random"
@@ -22,7 +30,7 @@
         <testsuite name="functional">
             <directory>tests/Functional</directory>
         </testsuite>
-        <!-- Live sandbox tests: never part of the default run, use `make test-contract`. -->
+        <!-- Live contract tests (real hosts, test mode): never part of the default run, use `make test-contract`. -->
         <testsuite name="contract">
             <directory>tests/Contract</directory>
         </testsuite>

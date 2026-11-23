@@ -2,93 +2,156 @@
 
 Specification: [api-reference.md](api-reference.md). Architecture, conventions and quality gates are the same as in
 `thebeardedbear/urssaf-tiers-prestations` (hexagonal layers enforced by Deptrac, PSR-only runtime, Symfony and
-Doctrine bridges, 100 % coverage and MSI), with one major difference: **this API is not OAuth2 and not JSON**. It
-uses an XML authentication call returning an opaque token, and XML (plus PDF) payloads.
+Doctrine bridges, 100 % coverage and MSI), see [ADR 0000](adr/0000-reference-architecture.md), with one major
+difference: **this API is not OAuth2 and not JSON**. It uses an XML authentication call returning an opaque token, and
+XML (plus PDF) payloads. The deviations are decided by ADR 0001 to 0009 (accepted 2026-11-22, [docs/adr/](adr/));
+the first version covers **phase 1 (raw-flow deposit) + the declaration model** ([ADR 0007](adr/0007-declaration-model.md)).
 
 ## Already in place (skeleton)
 
 - `SpecVersion::CURRENT` (`1.0.0`).
-- `Infrastructure\Urssaf\Environment` (Sandbox / Production base URIs) and `Infrastructure\Urssaf\UrssafEndpoints`
-  (Swagger paths under the base path `/authentifier_dpae`). **Both must change** (api-reference §4.2, §5.1):
-  - the PDF publishes four dedicated hosts (`mon.urssaf.fr/authentifier_dpae`, `depot.dpae-edi.urssaf.fr`,
-    `consultation.dpae-edi.urssaf.fr`, `telechargement.dpae-edi.urssaf.fr`, port `8443` for concentrators) instead of
-    `api.urssaf.fr` + base path;
-  - there is no sandbox host: test vs real is the test indicator in the deposited flow, so `Sandbox` goes away (or
-    becomes a configuration of the declaration mode, not of the host).
+- `Infrastructure\Urssaf\UrssafEndpoints` (paths without the `/authentifier_dpae` prefix, only the authentication path
+  is `/authentifier_dpae`), `Infrastructure\Urssaf\DpaeService` and `ServiceEndpoints` (four overridable base URIs
+  `mon.urssaf.fr`, `depot.dpae-edi.urssaf.fr`, `consultation.dpae-edi.urssaf.fr`, `telechargement.dpae-edi.urssaf.fr`,
+  port `8443` added to the default non-authentication URIs of a concentrator identity). `Environment` and its test are
+  deleted (no sandbox host; "production" is `DeclarationMode::Real`,
+  [ADR 0003](adr/0003-declaration-mode-and-simulator-guard.md)) ([ADR 0002](adr/0002-hosts-per-service.md)).
+- Lot 4 (HTTP gateway) is implemented: see "Application" and "Infrastructure" below. The ports are tenant-scoped, so
+  `Domain\Tenant\TenantId` was added with it.
+- Lot 5 (application layer) is implemented: `Deposit\{Deposit, DepositId, DepositState, ExternalReference}`,
+  `Return\{TrackedReturn, DownloadState, SyncCursor}`, domain and integration events, the ports and `WorkflowPolicy`,
+  `UnitOfWork`, the handlers `DepositDpae`, `ListReturns`, `DownloadReturn`, `SynchronizeReturns`,
+  `ReconcileUnknownDeposits`, the in-memory adapters, `Testing\SimulatedDpaeGateway`, the plain
+  `Bridge\Symfony\DependencyInjection\SimulatedGatewayFactory` class (unit-tested; its container wiring and the functional
+  test modelled on the CESU package are lot 6) and the standalone `UrssafDpaeBuilder`; the Deptrac layers `Contract`, `Testing` and `Standalone` are in `deptrac.yaml`. **Deferred
+  to later lots:** `DownloadDueReturns` (and the `downloadRetention` tunable), `ResolveDepositOutcome`,
+  `RequeueInvalidCredentials`, `GetWorkflowOverview` / `WorkflowStatistics`, `RelayOutbox` / `PurgeOutbox` (and the
+  `IntegrationEventSink` port), the Symfony and Doctrine bridges, and the nature `10` document check of the reconciliation
+  ([ADR 0005](adr/0005-deposit-result-and-unknown-outcome.md) amendment, api-reference.md §5.23).
 
 ## Domain (`src/Domain`)
 
-- `Declarant\DeclarantCredentials` (`siret`, `nom`, `prenom`, `motdepasse`, `service`), `Declarant\Siret` (14 chars),
-  `Declarant\ServiceCode` (`25` direct, `98` concentrator; unknown integers preserved, §4.11).
-- `Authentication\DpaeToken` (opaque base-64 string; never logged, never persisted).
-- `Declaration\DeclarationMode` (`Test|Real`, §3.3), `Declaration\DpaeFlow` (raw XML flow + mode; well-formedness
-  check only at first). Domain model of the declaration (employer, employee, contract) and XML builder: later phase.
-- `Deposit\FlowId` (`IdFluxDPAE`, 1–50), `Deposit\ElectronicReceipt` (AEE), `Deposit\RejectionNotice` (ARE),
-  `Deposit\DepositResult` (sum type: `ElectronicReceipt|RejectionNotice`).
-- `Return\ReturnReference` (flux id, return id 1–10, nature, statut, publication, production, ops, delegataire, url),
-  `Return\ReturnNature` (enum `10|11|20|41`, unknown preserved, §3.1), `Return\ReturnStatus` (`OK|KO|ANO|EN_COURS`),
-  `Return\ReturnContent` (raw bytes + content type, XML or PDF).
-- `Domain\Exception\*`.
+Split into lots; each lot is merged green (100 % coverage, MSI 100 %).
+
+### Lot 1 — value objects, sum types, exceptions
+
+- `Declarant\DeclarantCredentials` (`siret`, `nom`, `prenom`, `motdepasse`, `service`; Swagger lengths only; private
+  constructor, `of()`), `Declarant\Siret` (14 chars), `Declarant\ServiceCode` (raw int32 + `ServiceKind` `Direct` 25 /
+  `Concentrator` 98) ([ADR 0001](adr/0001-xml-token-authentication.md)).
+- `Authentication\DpaeToken` (opaque, never logged, never persisted), `Exception\AuthenticationFailure` (realm enum).
+- `Declaration\DeclarationMode` (`Test|Real`), `Declaration\TestIndicators`, `Declaration\DpaeFlow` (raw XML via
+  `fromXml($bytes, $mode, $indicators)`, always with its mode; the flow fingerprint is `Deposit\FlowFingerprint`)
+  ([ADR 0003](adr/0003-declaration-mode-and-simulator-guard.md)).
+- `Deposit\FlowId` (`IdFluxDPAE`, 1-50), `Deposit\FlowFingerprint`, `Deposit\RawDocument`, `Deposit\ElectronicReceipt`,
+  `Deposit\RejectionNotice`, `Deposit\DepositResult` (sum type by convention)
+  ([ADR 0005](adr/0005-deposit-result-and-unknown-outcome.md)).
+- `Return\ReturnReference` (private constructor, `fromListing()`; flux id, nature, statut, publication, production, ops,
+  delegataire, id, url; every value stored raw), `Return\ReturnId` (`idRetour` 1-10, checked at download),
+  `Return\ReturnIdentity`, `Return\ReturnNature` (`10|11|20|41`, unknown preserved), `Return\ReturnStatus`
+  (`OK|KO|ANO|EN_COURS`, unknown preserved), `Return\ReturnContent` (raw bytes + raw content type),
+  `Return\ReturnContentType` ([ADR 0006](adr/0006-polling-constraints.md)).
+- `Shared\Instant`, `Validation\*` (notification pattern), `Domain\Exception\*` (reference hierarchy,
+  `CredentialsNotSerializable`, `PayloadNotSerializable`).
+
+### Lot 2 — declaration model
+
+- `Declaration\Declaration`, `Employer`, `Employee`, `Contract`, `ContractType` (`Cdd|Cdi|Ctt`), `DeclarationVocabulary`, `DeclarationRules` and the builder `Wire\DpaeFlowBuilder`,
+  validated with the section 3.4 rules of [ADR 0007](adr/0007-declaration-model.md) (notification pattern, `normCode`
+  parameter).
+
+### Lot 5 — Application (domain parts) — done
+
+- (`Tenant\TenantId` exists since lot 4, [ADR 0001](adr/0001-xml-token-authentication.md).) `Deposit\ExternalReference` (the host's
+  identifier of the hire), the `Deposit\Deposit` aggregate with `DepositState` (`pending`, `depositing`, `received`,
+  `rejected`, `failed`, `outcome_unknown`, `not_received`, `invalid_credentials`)
+  ([ADR 0005](adr/0005-deposit-result-and-unknown-outcome.md)) and `Return\DownloadState`
+  ([ADR 0006](adr/0006-polling-constraints.md)).
 
 ## Application (`src/Application`)
 
-- Ports `Port\Urssaf\DpaeGateway` (`authenticate`, `deposit(DpaeFlow, DeclarationMode)`, `listReturns(from, ?to)`,
-  `downloadReturn(flowId, returnId)`), `CredentialsProvider`, `TokenStore` (in-memory default; the token is a
-  credential, no persistent default).
-- Commands/queries: `DepositDpae` / handler, `ListReturns` / handler (one-date and two-date paths),
-  `DownloadReturn` / handler (uses `url` when set), `SynchronizeReturns` (poll since the last known publication date,
-  store new returns; needs the Doctrine bridge or an in-memory fake).
+- Ports: `Port\Urssaf\DpaeGateway` (`deposit(TenantId, DpaeFlow): DepositResult`,
+  `listReturns(TenantId, Instant $from, ?Instant $to): list<ReturnReference>`,
+  `downloadReturn(TenantId, ReturnReference): ReturnContent`; implemented in lot 4),
+  `Port\Urssaf\OutcomeUnknown`, `Port\Urssaf\PollingConstraintViolated`, `Port\Urssaf\ReturnNoLongerAvailable`,
+  `Port\Urssaf\ReturnNotDownloadable`, `CredentialsProvider` (`InMemoryCredentialsProvider`), `TokenStore`
+  (in-memory only), `DepositRepository`, `ReturnRepository`, `ReturnContentStore`, `SynchronizationCursorRepository`,
+  `TransactionManager`, `Outbox`, `EventPublisher`, `WorkflowPolicy` (every tunable of ADR 0005 / 0006).
+- Commands/queries: `DepositDpae` (tenant, `ExternalReference`, `DpaeFlow`; the flow's mode is capped by the
+  installation mode), `ListReturns` (one-date and two-date paths), `SynchronizeReturns` (dedicated cursor, upsert,
+  optional `polling_max_range`),
+  `DownloadReturn` / `DownloadDueReturns` (`url` honoured only on the configured download origin),
+  `ReconcileUnknownDeposits` (declarant SIRET + fingerprint + publication window), `ResolveDepositOutcome`,
+  `RequeueInvalidCredentials`, `GetWorkflowOverview`.
 
 ## Infrastructure (`src/Infrastructure`)
 
-- `Urssaf\Http\DpaeTokenProvider`: `POST` of the XML `identifiants`, base-64 token from the response body, re-auth on
-  401 with realm `Expiration du jeton`. **`OAuth2TokenProvider` from Tiers de prestations is not reusable.**
-- `Urssaf\Http\XmlApiClient` (XML/binary instead of the JSON client; gzip request body via `ext-zlib`; gzip-aware
-  `Accept-Encoding`; `Authorization: DPAELogin jeton=…`), mapping 401 by `WWW-Authenticate` realm (§1.3), 403/404/406/
-  415/422/429.
-- `Urssaf\UrssafHttpGateway` + `Urssaf\Wire\*` (`IdentifiantsXmlWriter`, `RetoursXmlReader`, `EnvoiXmlReader`,
-  `yyyyMMddHHmmss` date formatter). Readers use `ext-dom` with `LIBXML_NONET`, no DTD, honour ISO-8859-1.
-- `Urssaf\ApiConfiguration`: four overridable service base URIs (defaults from the PDF), optional port `8443`,
-  credentials, default `DeclarationMode`, optional max payload size.
-- `UrssafEndpoints` reduced to path constants without the `/authentifier_dpae` prefix for the deposit and return
-  services (the authentication path stays `/authentifier_dpae`).
+- `Urssaf\Http\DpaeTokenProvider` (XML `identifiants`, opaque token, replay once on `Expiration du jeton`) —
+  **`OAuth2TokenProvider` from Tiers de prestations is not reusable** ([ADR 0001](adr/0001-xml-token-authentication.md)).
+- `Urssaf\Http\XmlApiClient` (gzip request body, `Accept-Encoding: gzip`, decoding of still-gzipped answers,
+  `Authorization: DPAELogin jeton=…`, no redirects), status mapping of [ADR 0004](adr/0004-xml-gzip-client.md).
+- `Urssaf\UrssafHttpGateway` + `Urssaf\Wire\*`: `SafeXmlReader` (`LIBXML_NONET`, DOCTYPE refused, declared encoding
+  honoured), `IdentifiantsXmlWriter`, `EnvoiXmlReader`, `RetoursXmlReader`, `DpaeFlowBuilder`
+  (ISO-8859-1; `DeclarationVocabulary` and `DeclarationRules` live in the Domain), `yyyyMMddHHmmss` date codec with a configurable time zone.
+- `Urssaf\ApiConfiguration` (`defaults()` plus `with*()`; lot 4): `ServiceEndpoints` (four base URIs,
+  `concentrator_port`), `authentication_encoding`, `deposit_content_type`, `max_flow_bytes`, `max_response_bytes`,
+  `returns_time_zone`. `declaration_mode`, `test_indicator.*`, the declaration vocabulary and name pattern belong to the
+  builder and the bridges (`TestIndicators`, `DeclarationVocabulary`, `DeclarationRules`).
+- Lot 4 also ships `Urssaf\UrssafGatewayFactory` / `GatewayOptions` / `HttpTransport` (the standalone entry point),
+  `Urssaf\Http\{ApiRequest,HttpAnswer,AnswerInterpreter}`, `Infrastructure\Clock\SystemClock`,
+  `Infrastructure\Credentials\InMemoryCredentialsProvider` and `Infrastructure\TokenStore\InMemoryTokenStore`.
+- `Testing\SimulatedDpaeGateway` (refuses `Real`, no returns 20 / 41).
 
 ## Bridges
 
-- Symfony bundle `UrssafDpaeBundle` (alias `urssaf_dpae`): configuration (credentials, `service`, host overrides,
-  `concentrator` port flag, declaration mode), HTTP client, console commands `urssaf:dpae:deposit <file>`,
-  `urssaf:dpae:returns [--from] [--to]`, `urssaf:dpae:download <flowId> <returnId>`.
-- Doctrine bridge: **probably needed**. Returns are purged by URSSAF after 3 months and the consultation history is
-  13 months, so deposits (flux id, declarant, mode, outcome) and returns (reference, content) are persisted to
-  reconcile and keep them; includes the migration and a repository for `SynchronizeReturns`.
+- Symfony bundle `UrssafDpaeBundle` (alias `urssaf_dpae`): configuration validated at build time, HTTP client with
+  `max_redirects: 0`, the container wiring of `SimulatedGatewayFactory` (refuses the resolved `real` mode) with its
+  functional test modelled on the CESU package, console commands `urssaf:dpae:*` (delivered: `check`, `deposit`, `returns`,
+  `download`, `sync-returns`, `reconcile`, `relay-outbox`, `purge-outbox`; `status`, `resolve`, `requeue` and
+  `download-returns` are deferred until their use cases exist, see the amendment "the Symfony bridge as implemented (lot 6)"
+  of [ADR 0009](adr/0009-coexistence.md)), Messenger, locks and Scheduler prefixed `urssaf_dpae`, en / fr translations, Flex
+  recipe in `recipe/` ([ADR 0009](adr/0009-coexistence.md), [docs/symfony.md](symfony.md)).
+- Doctrine bridge ([ADR 0008](adr/0008-doctrine-persistence.md)): required for the full lifecycle, still an optional
+  Composer dependency. Tables `urssaf_dpae_deposits`, `urssaf_dpae_deposit_flows` (opt-in), `urssaf_dpae_returns`,
+  `urssaf_dpae_return_contents`, `urssaf_dpae_sync_cursors`, `urssaf_dpae_outbox`; DBAL types `urssaf_dpae_*`;
+  returns kept beyond the 3-month purge, no local retention period. Schema documented in `docs/doctrine.md`; **no
+  migration is shipped** (as the reference).
+- Standalone builder `UrssafDpaeBuilder` (`withGateway()` refuses `real`).
 
 ## Runtime dependencies to add with the code
 
 `ext-dom`, `ext-libxml`, `ext-zlib`, `ext-mbstring`, `psr/http-client`, `psr/http-factory`, `psr/http-message`,
 `psr/clock`, `psr/log`, plus the matching `suggest` entries (Symfony and Doctrine bridges). `ext-json` is not needed by
-the API itself.
+the API itself. Symfony components in `require-dev` `^6.4.3 || ^7.4 || ^8.0`, Symfony 8.x in the CI matrix (PHP ≥ 8.4).
 
 ## Tests
 
-- Unit: value objects, XML writers/readers against `tests/Fixtures/wire/*` (currently only
-  `deposit_request_minimal.xml`; the other wire examples are not published and must be captured, see
-  api-reference §5), handlers with a fake gateway, token provider (re-auth on expired token), 401 realm mapping.
-- Functional: Symfony bundle wiring, Doctrine mapping.
-- Contract (`make test-contract`, manual CI job): real credentials (an *Urssaf en ligne* subscriber, or a registered
-  concentrator) in `URSSAF_DPAE_SIRET/NOM/PRENOM/PASSWORD/SERVICE`, optional host overrides. Always deposits with the
-  **test indicator** (`TST`/`120` to be confirmed) and never in real mode. First goals: settle the host and path
-  discrepancy, the test indicator semantics, the authentication XML shape, and capture official samples of the AEE,
-  rejection notice, list response and returns.
+- Benchmarks (`make bench`, lot 8): PHPBench over `tests/Benchmark` (declaration validation, flow encoding and gzip, decoding of the answers).
+- Unit: value objects, declaration validation (§3.4), XML writers/readers against `tests/Fixtures/wire/*` (the
+  declaration writer's golden test is `deposit_request_minimal.xml`; the other wire examples are not published and
+  must be captured, see api-reference §5), handlers with fake doubles, token provider (replay on expired token), 401
+  realm mapping, `url` origin policy, reconciliation cases.
+- Functional: Symfony bundle wiring (simulator guard, recipe), Doctrine mapping, repository contract traits.
+- Contract (`make test-contract`, manual CI job; delivered in lot 8, [testing.md](testing.md)): real credentials (an *Urssaf en ligne* subscriber, or a registered
+  concentrator) in `URSSAF_DPAE_SIRET`, `URSSAF_DPAE_NOM`, `URSSAF_DPAE_PRENOM`, `URSSAF_DPAE_PASSWORD`,
+  `URSSAF_DPAE_SERVICE`, optional `URSSAF_DPAE_{AUTHENTICATION,DEPOSIT,CONSULTATION,DOWNLOAD}_URI` overrides, and `URSSAF_DPAE_CONTRACT_DEPOSIT=1` to allow the one test that writes. Always a `test` installation and
+  `DeclarationMode::Test`, never real. First goals: settle hosts and paths, the test indicator values, the
+  authentication XML shape, a built flow without raison sociale, and capture samples of the AEE, rejection notice,
+  list response and returns.
 
 ## Order of work
 
-1. Settle the open points that block the design with a first contract test (hosts, authentication XML, test
-   indicator); update `Environment`/`UrssafEndpoints`.
-2. Domain value objects and result sum types.
-3. Wire writers/readers + fixtures.
-4. HTTP gateway (authentication, deposit, lists, download, error mapping, 429/422 handling).
-5. Application commands/queries.
-6. Symfony bridge.
-7. Doctrine bridge and `SynchronizeReturns`.
-8. Contract tests, then remove the open points from `api-reference.md`; later phase: declaration domain model and
-   XML builder.
+Delivered, in order (each lot merged green: 100 % lines, 96 % branches at least, MSI 100 %):
+
+1. Replace `Environment` / `UrssafEndpoints` (ADR 0002, lot 4) and complete `deptrac.yaml` (Contract, Testing, Standalone; lot 5). **Done.**
+2. Domain: lot 1 (value objects, sum types, exceptions), then lot 2 (declaration model and its validation). **Done.**
+3. Wire writers/readers + fixtures (`SafeXmlReader`, identifiants, envoi, retours, declaration writer). **Done.**
+4. HTTP gateway (authentication, deposit, lists, download, status mapping, 422 / 429). **Done (lot 4).**
+5. Application commands/queries (deposit, synchronisation, download, reconciliation). **Done (lot 5);** see "Already in place" for what stays deferred.
+6. Symfony bridge and Flex recipe ([symfony.md](symfony.md), ADR 0009 amendment). **Done (lot 6).** `RelayOutbox` / `PurgeOutbox` and the `IntegrationEventSink` port shipped with it.
+7. Doctrine bridge ([doctrine.md](doctrine.md), ADR 0008). **Done (lot 7).**
+8. Contract tests, benchmarks and documentation ([testing.md](testing.md), [workflow.md](workflow.md)). **Done (lot 8):** the suite in `tests/Contract` (skipped without credentials, test mode only), the PHPBench benchmarks in `tests/Benchmark`, the final README and CHANGELOG.
+
+Still to do, because only URSSAF can answer: run `make test-contract` with the credentials of a subscriber, then remove the
+settled open points from api-reference.md section 5 and amend the ADRs concerned (hosts, test indicator, authentication
+XML, bodies of the returns). Deferred use cases: `DownloadDueReturns`, `ResolveDepositOutcome`, `RequeueInvalidCredentials`,
+`GetWorkflowOverview` / status (and the `status`, `resolve`, `requeue`, `download-returns` commands that need them).

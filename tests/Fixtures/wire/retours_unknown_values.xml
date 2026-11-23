@@ -1,0 +1,19 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!-- inféré: fictif, aucun exemple officiel publié (api-reference §2.3, §5.9). Valeurs inconnues, éléments en plus, date illisible: rien ne doit casser la lecture. -->
+<retours version="9">
+    <extension>ignoré</extension>
+    <flux unknown="x">
+        <id>FICTIF0000000000000003</id>
+        <futur>ignoré</futur>
+        <retour extra="y">
+            <publication>pas une date</publication>
+            <production>20220301000000</production>
+            <nature>99</nature>
+            <statut>NOUVEAU_STATUT</statut>
+            <nouveau>ignoré</nouveau>
+        </retour>
+    </flux>
+    <flux>
+        <id>FICTIF0000000000000004</id>
+    </flux>
+</retours>

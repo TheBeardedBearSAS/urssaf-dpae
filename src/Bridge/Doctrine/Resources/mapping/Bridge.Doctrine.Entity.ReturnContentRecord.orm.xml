@@ -1,0 +1,28 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+  This file is part of thebeardedbear/urssaf-dpae.
+
+  Copyright (c) TheBeardedBear and the urssaf-dpae contributors
+
+  SPDX-License-Identifier: MIT
+-->
+<doctrine-mapping xmlns="http://doctrine-project.org/schemas/orm/doctrine-mapping"
+                  xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+                  xsi:schemaLocation="http://doctrine-project.org/schemas/orm/doctrine-mapping https://www.doctrine-project.org/schemas/orm/doctrine-mapping.xsd">
+    <!-- Downloaded documents of the returns, kept after URSSAF purged them (3 months). Personal data. No foreign key:
+         the content is stored before the return. -->
+    <entity name="TheBeardedBear\UrssafDpae\Bridge\Doctrine\Entity\ReturnContentRecord" table="urssaf_dpae_return_contents" read-only="true">
+        <indexes>
+            <index name="idx_urssaf_dpae_return_content_downloaded" columns="tenant_id,downloaded_at"/>
+        </indexes>
+        <id name="returnId" type="string" column="return_id" length="64">
+            <generator strategy="NONE"/>
+        </id>
+        <field name="tenantId" type="urssaf_dpae_tenant_id" column="tenant_id" length="64"/>
+        <field name="contentType" type="string" column="content_type" length="255"/>
+        <field name="content" type="urssaf_dpae_bytes" column="content"/>
+        <field name="size" type="integer" column="size"/>
+        <field name="sha256" type="string" column="sha256" length="64"/>
+        <field name="downloadedAt" type="urssaf_dpae_instant" column="downloaded_at"/>
+    </entity>
+</doctrine-mapping>

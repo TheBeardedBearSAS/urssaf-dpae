@@ -1,3 +1,9 @@
+# This file is part of thebeardedbear/urssaf-dpae.
+#
+# Copyright (c) TheBeardedBear and the urssaf-dpae contributors
+#
+# SPDX-License-Identifier: MIT
+
 name: CI
 
 on:
@@ -5,10 +11,12 @@ on:
     branches: [main]
     tags: ['v*']
   pull_request:
+  schedule:
+    - cron: '17 3 * * *' # nightly: branch coverage (see the coverage-branches job)
   workflow_dispatch:
     inputs:
       contract:
-        description: Run the contract tests against the URSSAF sandbox (needs repository secrets)
+        description: Run the contract tests against the live URSSAF hosts (test mode) (needs repository secrets)
         type: boolean
         default: false
 
@@ -75,6 +83,24 @@ jobs:
             echo "Forbidden word found (see files above)"
             exit 1
           fi
+      - name: SPDX headers
+        run: sh bin/check-spdx
+
+  # Developer Certificate of Origin: every commit of a pull request is signed off (`git commit -s`), see CONTRIBUTING.md.
+  dco:
+    name: dco
+    if: github.event_name == 'pull_request'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+      - name: Signed-off-by on every commit
+        env:
+          BASE_SHA: ${{ github.event.pull_request.base.sha }}
+          HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+        run: bin/check-dco "${BASE_SHA}..${HEAD_SHA}"
 
   hadolint:
     name: hadolint
@@ -109,6 +135,23 @@ jobs:
           dependencies: ${{ matrix.dependencies }}
       - run: vendor/bin/phpunit --testsuite=unit,functional
 
+  # Symfony 8 (needs PHP >= 8.4 and DoctrineBundle 3): the QA tools that pin symfony/console < 8 are dropped for this job
+  # (bin/require-symfony8), the unit and functional suites run against the Symfony 8 components.
+  tests-symfony8:
+    name: tests (PHP 8.4, Symfony 8)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: ./.github/actions/setup
+        with:
+          php-version: '8.4'
+          dependencies: symfony8
+      - run: |
+          for package in symfony/framework-bundle doctrine/doctrine-bundle; do
+            composer show "$package" | grep -E '^(name|versions)'
+          done
+      - run: vendor/bin/phpunit --testsuite=unit,functional
+
   # 100 % lines / methods / classes over the whole of src (unit + functional suites).
   coverage:
     name: coverage
@@ -140,6 +183,31 @@ jobs:
         with:
           name: coverage
           path: var/coverage/
+          retention-days: 7
+
+  # Branch / path coverage (Xdebug, slow): main, nightly and manual runs only, never on a pull request.
+  coverage-branches:
+    name: coverage-branches
+    if: github.event_name != 'pull_request'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: ./.github/actions/setup
+        with:
+          php-version: '8.2'
+          dependencies: locked
+          coverage: xdebug
+      - run: >-
+          vendor/bin/phpunit --testsuite=unit,functional --path-coverage --coverage-text
+          --coverage-cobertura var/coverage/cobertura.xml
+        env:
+          XDEBUG_MODE: coverage
+      - run: php bin/check-branch-coverage var/coverage/cobertura.xml 96
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        if: always()
+        with:
+          name: coverage-branches
+          path: var/coverage/cobertura.xml
           retention-days: 7
 
   # Same as `make infection`: Infection runs its own initial test pass (never --skip-initial-tests, which yields a false
@@ -197,7 +265,7 @@ jobs:
 
   # PHPBench (tools/phpbench, out of the package dependencies). On a pull request, the benchmarks of the branch also run
   # against the base commit in the same job, and the job fails on a regression of more than 20 %. Every step is skipped
-  # until tests/Benchmark holds a benchmark.
+  # when tests/Benchmark holds no *Bench.php file.
   benchmark:
     name: benchmark
     runs-on: ubuntu-latest
@@ -233,21 +301,62 @@ jobs:
             tools/phpbench/vendor/bin/phpbench run --report=urssaf --store --tag=current
           fi
 
-  # Manual only: Actions > CI > Run workflow > "contract". Repository secrets URSSAF_SANDBOX_CLIENT_ID and
-  # URSSAF_SANDBOX_CLIENT_SECRET are required; URSSAF_SANDBOX_BASE_URI is an optional repository variable.
+  flex-endpoint:
+    # Builds the Flex endpoint of the recipe (recipe/) to check it.
+    name: flex endpoint
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: ./.github/actions/setup
+        with:
+          php-version: '8.4'
+      - run: bin/build-flex-endpoint var/flex-endpoint https://flex.invalid/urssaf-dpae
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: flex-endpoint
+          path: var/flex-endpoint
+
+  # Manual only: Actions > CI > Run workflow > "contract". Repository secrets URSSAF_DPAE_SIRET, URSSAF_DPAE_NOM,
+  # URSSAF_DPAE_PRENOM, URSSAF_DPAE_PASSWORD and URSSAF_DPAE_SERVICE are required; URSSAF_DPAE_AUTHENTICATION_URI,
+  # URSSAF_DPAE_DEPOSIT_URI, URSSAF_DPAE_CONSULTATION_URI and URSSAF_DPAE_DOWNLOAD_URI (the host overrides of the recipe,
+  # ADR 0002 and 0009) are optional repository variables, and so is URSSAF_DPAE_CONTRACT_DEPOSIT (`1` allows the one test
+  # call that writes, a test-mode deposit). Always the test mode, never real.
   contract:
-    name: contract (URSSAF sandbox)
+    name: contract (URSSAF DPAE)
     if: github.event_name == 'workflow_dispatch' && inputs.contract
     runs-on: ubuntu-latest
-    environment: urssaf-sandbox
+    environment: urssaf-dpae
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       - uses: ./.github/actions/setup
         with:
           php-version: '8.2'
           dependencies: locked
+      - name: Check the required secrets are set
+        env:
+          URSSAF_DPAE_SIRET: ${{ secrets.URSSAF_DPAE_SIRET }}
+          URSSAF_DPAE_NOM: ${{ secrets.URSSAF_DPAE_NOM }}
+          URSSAF_DPAE_PRENOM: ${{ secrets.URSSAF_DPAE_PRENOM }}
+          URSSAF_DPAE_PASSWORD: ${{ secrets.URSSAF_DPAE_PASSWORD }}
+          URSSAF_DPAE_SERVICE: ${{ secrets.URSSAF_DPAE_SERVICE }}
+        run: |
+          status=0
+          for name in URSSAF_DPAE_SIRET URSSAF_DPAE_NOM URSSAF_DPAE_PRENOM URSSAF_DPAE_PASSWORD URSSAF_DPAE_SERVICE; do
+            if [ -z "$(printenv "$name")" ]; then
+              echo "::error::The secret $name is missing or empty: the contract tests would be skipped, not run."
+              status=1
+            fi
+          done
+          exit "$status"
       - run: vendor/bin/phpunit --testsuite=contract
         env:
-          URSSAF_SANDBOX_CLIENT_ID: ${{ secrets.URSSAF_SANDBOX_CLIENT_ID }}
-          URSSAF_SANDBOX_CLIENT_SECRET: ${{ secrets.URSSAF_SANDBOX_CLIENT_SECRET }}
-          URSSAF_SANDBOX_BASE_URI: ${{ vars.URSSAF_SANDBOX_BASE_URI }}
+          URSSAF_DPAE_SIRET: ${{ secrets.URSSAF_DPAE_SIRET }}
+          URSSAF_DPAE_NOM: ${{ secrets.URSSAF_DPAE_NOM }}
+          URSSAF_DPAE_PRENOM: ${{ secrets.URSSAF_DPAE_PRENOM }}
+          URSSAF_DPAE_PASSWORD: ${{ secrets.URSSAF_DPAE_PASSWORD }}
+          URSSAF_DPAE_SERVICE: ${{ secrets.URSSAF_DPAE_SERVICE }}
+          URSSAF_DPAE_AUTHENTICATION_URI: ${{ vars.URSSAF_DPAE_AUTHENTICATION_URI }}
+          URSSAF_DPAE_DEPOSIT_URI: ${{ vars.URSSAF_DPAE_DEPOSIT_URI }}
+          URSSAF_DPAE_CONSULTATION_URI: ${{ vars.URSSAF_DPAE_CONSULTATION_URI }}
+          URSSAF_DPAE_DOWNLOAD_URI: ${{ vars.URSSAF_DPAE_DOWNLOAD_URI }}
+          URSSAF_DPAE_CONTRACT_DEPOSIT: ${{ vars.URSSAF_DPAE_CONTRACT_DEPOSIT }}

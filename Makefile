@@ -1,3 +1,9 @@
+# This file is part of thebeardedbear/urssaf-dpae.
+#
+# Copyright (c) TheBeardedBear and the urssaf-dpae contributors
+#
+# SPDX-License-Identifier: MIT
+
 # Every target runs inside Docker; no local PHP/Composer is required.
 #
 # Tooling notes:
@@ -12,8 +18,8 @@ SUITES := $(shell for s in Unit Functional; do [ -d tests/$$s ] && echo $$s; don
 UNIT_FUNCTIONAL := --testsuite=$(SUITES)
 
 .DEFAULT_GOAL := help
-.PHONY: help build install update shell test test-unit test-functional test-contract coverage coverage-paths \
-	bench infection phpstan mago cs cs-fix rector rector-fix deptrac composer-checks hadolint guard ci
+.PHONY: help build install update shell test test-unit test-functional test-contract coverage coverage-paths coverage-branches \
+	bench infection phpstan mago cs cs-fix rector rector-fix deptrac composer-checks hadolint guard flex-endpoint ci
 
 help: ## List targets
 	@grep -E '^[a-z-]+:.*##' $(MAKEFILE_LIST) | awk -F':.*## ' '{printf "%-16s %s\n", $$1, $$2}'
@@ -40,8 +46,8 @@ test-unit: ## Run unit tests
 test-functional: ## Run functional tests
 	$(PHP) vendor/bin/phpunit --testsuite=functional
 
-test-contract: ## Run live sandbox contract tests (needs URSSAF_SANDBOX_CLIENT_ID/SECRET)
-	docker compose run --rm -e URSSAF_SANDBOX_CLIENT_ID -e URSSAF_SANDBOX_CLIENT_SECRET -e URSSAF_SANDBOX_BASE_URI php vendor/bin/phpunit --testsuite=contract
+test-contract: ## Run live contract tests (needs URSSAF_DPAE_SIRET/NOM/PRENOM/PASSWORD/SERVICE; optional host overrides URSSAF_DPAE_*_URI; URSSAF_DPAE_CONTRACT_DEPOSIT=1 allows the test-mode deposit)
+	docker compose run --rm -e URSSAF_DPAE_SIRET -e URSSAF_DPAE_NOM -e URSSAF_DPAE_PRENOM -e URSSAF_DPAE_PASSWORD -e URSSAF_DPAE_SERVICE -e URSSAF_DPAE_AUTHENTICATION_URI -e URSSAF_DPAE_DEPOSIT_URI -e URSSAF_DPAE_CONSULTATION_URI -e URSSAF_DPAE_DOWNLOAD_URI -e URSSAF_DPAE_CONTRACT_DEPOSIT php vendor/bin/phpunit --testsuite=contract
 
 coverage: ## Coverage (pcov): text + clover + html in var/coverage, enforce 100% lines/methods/classes
 	$(PHP) vendor/bin/phpunit $(UNIT_FUNCTIONAL) --coverage-text --coverage-clover var/coverage/clover.xml --coverage-html var/coverage/html --coverage-xml var/coverage/coverage-xml --log-junit var/coverage/junit.xml
@@ -49,6 +55,10 @@ coverage: ## Coverage (pcov): text + clover + html in var/coverage, enforce 100%
 
 coverage-paths: ## Path coverage report (Xdebug)
 	$(PHP_XDEBUG) php -d pcov.enabled=0 vendor/bin/phpunit $(UNIT_FUNCTIONAL) --path-coverage --coverage-html var/coverage/paths
+
+coverage-branches: ## Branch coverage (Xdebug, slow): Cobertura in var/coverage, enforce >= 96 % branches
+	$(PHP_XDEBUG) php -d pcov.enabled=0 vendor/bin/phpunit $(UNIT_FUNCTIONAL) --path-coverage --coverage-text --coverage-cobertura var/coverage/cobertura.xml
+	$(PHP) php bin/check-branch-coverage var/coverage/cobertura.xml 96
 
 bench: ## Benchmarks (PHPBench in tools/phpbench, out of the package dependencies); e.g. make bench ARGS="--tag=main"
 	$(PHP) composer install --no-progress --working-dir=tools/phpbench
@@ -94,9 +104,13 @@ hadolint: ## Lint the Dockerfiles (hadolint, .hadolint.yaml)
 	docker run --rm -v "$(CURDIR)":/repo:ro -w /repo hadolint/hadolint:v2.15.1@sha256:32dac94127fd60b7b7e3fbfc65e1383b9b5e25c9bfd7b8536de7a539fe68a12d \
 		hadolint docker/php/Dockerfile
 
-guard: ## Fail if the forbidden word is found in the repository
+guard: ## Fail on the forbidden word or a missing SPDX licence header
 	@if grep -rIil --exclude-dir=vendor --exclude-dir=var --exclude-dir=.git 'extra''bat' . ; then \
 		echo "Forbidden word found (see files above)"; exit 1; \
 	fi
+	$(PHP) sh bin/check-spdx
+
+flex-endpoint: ## Build the Flex endpoint of the recipe in var/flex-endpoint
+	$(PHP) php bin/build-flex-endpoint var/flex-endpoint https://flex.invalid/urssaf-dpae
 
 ci: cs rector phpstan mago deptrac composer-checks hadolint guard coverage infection ## Full quality gate

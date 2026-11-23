@@ -1,0 +1,11 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!-- inféré: fictif, aucun exemple officiel publié (api-reference §2.3, §5.9). Mêmes champs, en attributs. -->
+<retours>
+    <flux id="FICTIF0000000000000001">
+        <retour publication="20220130083000" production="20220130082500" nature="10" statut="OK" id="0123456789" url="https://telechargement.example.test/telecharger-retour/1.0/FICTIF0000000000000001/0123456789"/>
+        <retour publication="20220130090000" production="20220130085500" ops="OPS12" delegataire="DELEG" nature="41" statut="EN_COURS"/>
+    </flux>
+    <flux id="FICTIF0000000000000002">
+        <retour publication="20220131101500" production="20220131101000" nature="10" statut="KO"/>
+    </flux>
+</retours>

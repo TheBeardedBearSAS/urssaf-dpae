@@ -1,0 +1,44 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+  This file is part of thebeardedbear/urssaf-dpae.
+
+  Copyright (c) TheBeardedBear and the urssaf-dpae contributors
+
+  SPDX-License-Identifier: MIT
+-->
+<doctrine-mapping xmlns="http://doctrine-project.org/schemas/orm/doctrine-mapping"
+                  xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+                  xsi:schemaLocation="http://doctrine-project.org/schemas/orm/doctrine-mapping https://www.doctrine-project.org/schemas/orm/doctrine-mapping.xsd">
+    <!-- Returns, one per (tenant, flux.id, nature, ops); the key is derived from the identity. An absent ops is an empty
+         string with has_ops false, so that the unique index never sees a NULL. -->
+    <entity name="TheBeardedBear\UrssafDpae\Bridge\Doctrine\Entity\ReturnRecord" table="urssaf_dpae_returns" read-only="true">
+        <unique-constraints>
+            <unique-constraint name="uniq_urssaf_dpae_return_identity" columns="tenant_id,flow_id,nature,has_ops,ops"/>
+        </unique-constraints>
+        <indexes>
+            <index name="idx_urssaf_dpae_return_publication" columns="tenant_id,publication_at"/>
+            <index name="idx_urssaf_dpae_return_download" columns="tenant_id,download_state,publication_at"/>
+            <index name="idx_urssaf_dpae_return_first_seen" columns="tenant_id,first_seen_at"/>
+        </indexes>
+        <id name="id" type="string" column="id" length="64">
+            <generator strategy="NONE"/>
+        </id>
+        <field name="tenantId" type="urssaf_dpae_tenant_id" column="tenant_id" length="64"/>
+        <field name="flowId" type="urssaf_dpae_flow_id" column="flow_id" length="50"/>
+        <field name="nature" type="integer" column="nature"/>
+        <field name="hasOps" type="boolean" column="has_ops"/>
+        <field name="ops" type="string" column="ops" length="255"/>
+        <field name="status" type="string" column="status" length="255"/>
+        <field name="publicationRaw" type="string" column="publication_raw" length="255"/>
+        <field name="publicationAt" type="urssaf_dpae_instant" column="publication_at" nullable="true"/>
+        <field name="productionRaw" type="string" column="production_raw" length="255"/>
+        <field name="productionAt" type="urssaf_dpae_instant" column="production_at" nullable="true"/>
+        <field name="returnId" type="string" column="return_id" length="255" nullable="true"/>
+        <field name="delegate" type="string" column="delegate" length="255" nullable="true"/>
+        <field name="url" type="text" column="url" nullable="true"/>
+        <field name="depositId" type="urssaf_dpae_deposit_id" column="deposit_id" length="64" nullable="true"/>
+        <field name="downloadState" type="string" column="download_state" length="32" enum-type="TheBeardedBear\UrssafDpae\Domain\Return\DownloadState"/>
+        <field name="firstSeenAt" type="urssaf_dpae_instant" column="first_seen_at"/>
+        <field name="updatedAt" type="urssaf_dpae_instant" column="updated_at"/>
+    </entity>
+</doctrine-mapping>

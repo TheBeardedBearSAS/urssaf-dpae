@@ -14,15 +14,21 @@ the latest `0.y.z`.
 Please include:
 
 - the affected version(s);
-- a description of the issue and its impact (for example: credentials or personal data exposed, incorrect data sent
+- a description of the issue and its impact (for example: password, token or personal data exposed, incorrect data sent
   to or read from URSSAF, a bypassed validation);
 - the steps to reproduce, ideally a minimal test case.
 
-Never include real credentials (`client_id` / `client_secret`), access tokens, or the real data of people or companies
-(identity, tax or social security numbers, SIRET, IBAN...) in a report. Use fictitious values.
+Never include real credentials (SIRET, name, first name and password of an *Urssaf en ligne* subscriber), tokens, or
+the real data of people or companies (identity, social security numbers (NIR), birth data, SIRET...) in a report. Use
+fictitious values.
 
 You will get an acknowledgement within 5 working days. The fix is then prepared privately and released, and the
 advisory is published with credit to the reporter unless you ask otherwise.
+
+## Security design and review
+
+- [Assurance case](docs/security/assurance-case.md): security requirements, threat model, trust boundaries, secure
+  design principles and the countermeasures against common implementation weaknesses.
 
 ## Verifying a release
 
@@ -38,8 +44,8 @@ gh attestation verify urssaf-dpae-vX.Y.Z.zip --repo TheBeardedBearSAS/urssaf-dpa
 
 ## Scope
 
-In scope: the code of this package (HTTP client, OAuth2 token handling, validation, wire encoding and decoding,
-Symfony and Doctrine bridges).
+In scope: the code of this package (HTTP client, token authentication, validation, XML parsing, wire encoding and
+decoding of the DPAE flows and returns, Symfony and Doctrine bridges).
 
 Out of scope: the URSSAF platform itself (report those issues to URSSAF), and vulnerabilities in dependencies that
 this package does not make exploitable (report them upstream).

@@ -1,0 +1,21 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+  This file is part of thebeardedbear/urssaf-dpae.
+
+  Copyright (c) TheBeardedBear and the urssaf-dpae contributors
+
+  SPDX-License-Identifier: MIT
+-->
+<doctrine-mapping xmlns="http://doctrine-project.org/schemas/orm/doctrine-mapping"
+                  xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+                  xsi:schemaLocation="http://doctrine-project.org/schemas/orm/doctrine-mapping https://www.doctrine-project.org/schemas/orm/doctrine-mapping.xsd">
+    <!-- The return synchronisation cursor of each tenant: moved only by SynchronizeReturns (ADR 0006). -->
+    <entity name="TheBeardedBear\UrssafDpae\Bridge\Doctrine\Entity\SyncCursorRecord" table="urssaf_dpae_sync_cursors" read-only="true">
+        <id name="tenantId" type="urssaf_dpae_tenant_id" column="tenant_id" length="64">
+            <generator strategy="NONE"/>
+        </id>
+        <field name="cursorAt" type="urssaf_dpae_instant" column="cursor_at" nullable="true"/>
+        <field name="lastSuccessAt" type="urssaf_dpae_instant" column="last_success_at" nullable="true"/>
+        <field name="consecutiveRefusals" type="integer" column="consecutive_refusals"/>
+    </entity>
+</doctrine-mapping>

@@ -1,3 +1,9 @@
+# This file is part of thebeardedbear/urssaf-dpae.
+#
+# Copyright (c) TheBeardedBear and the urssaf-dpae contributors
+#
+# SPDX-License-Identifier: MIT
+
 # Dockerfile lint (make hadolint, CI job "hadolint"): every rule, failing from the "style" level up. Exceptions are
 # inline (# hadolint ignore=...) with their justification.
 failure-threshold: style

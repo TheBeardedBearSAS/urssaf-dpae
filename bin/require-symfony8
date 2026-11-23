@@ -1,0 +1,45 @@
+#!/usr/bin/env php
+<?php
+
+declare(strict_types=1);
+
+/*
+ * This file is part of thebeardedbear/urssaf-dpae.
+ *
+ * Copyright (c) TheBeardedBear and the urssaf-dpae contributors
+ *
+ * SPDX-License-Identifier: MIT
+ */
+
+// Prepares composer.json of a throw-away checkout (CI job "symfony 8") to resolve Symfony 8: every symfony/* package
+// that allows ^8.0 is required as ^8.0 (composer has no wildcard, unlike symfony/flex SYMFONY_REQUIRE), and the QA tools
+// that do not support Symfony 8 yet (they pin symfony/console < 8) are dropped: they check the code, not the runtime.
+// Never run it on a working copy you want to keep. Usage: php bin/require-symfony8 && composer update -W
+
+const QA_TOOLS = [
+    'maglnet/composer-require-checker',
+    'deptrac/deptrac',
+    'infection/infection',
+    'icanhazstring/composer-unused',
+    'friendsofphp/php-cs-fixer',
+    'ergebnis/composer-normalize',
+];
+
+$path = __DIR__ . '/../composer.json';
+$json = json_decode((string) file_get_contents($path), true, 512, JSON_THROW_ON_ERROR);
+if (!is_array($json) || !is_array($json['require-dev'] ?? null)) {
+    fwrite(STDERR, "composer.json has no require-dev section\n");
+    exit(2);
+}
+
+foreach (QA_TOOLS as $tool) {
+    unset($json['require-dev'][$tool]);
+}
+foreach ($json['require-dev'] as $package => $constraint) {
+    if (str_starts_with($package, 'symfony/') && is_string($constraint) && str_contains($constraint, '^8.0')) {
+        $json['require-dev'][$package] = '^8.0';
+    }
+}
+unset($json['config']['allow-plugins']['infection/extension-installer'], $json['config']['allow-plugins']['ergebnis/composer-normalize']);
+
+file_put_contents($path, json_encode($json, JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE | JSON_THROW_ON_ERROR) . "\n");

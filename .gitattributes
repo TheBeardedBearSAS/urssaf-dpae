@@ -9,6 +9,10 @@
 /.php-cs-fixer.dist.php export-ignore
 /Makefile export-ignore
 /bin/check-coverage export-ignore
+/bin/check-branch-coverage export-ignore
+/bin/build-flex-endpoint export-ignore
+/bin/check-dco export-ignore
+/bin/check-spdx export-ignore
 /composer-require-checker.json export-ignore
 /composer-unused.php export-ignore
 /deptrac.yaml export-ignore
@@ -26,3 +30,4 @@
 /tools export-ignore
 /sonar-project.properties export-ignore
 /.hadolint.yaml export-ignore
+/phpstan-constants.php export-ignore

@@ -1,5 +1,12 @@
+# This file is part of thebeardedbear/urssaf-dpae.
+#
+# Copyright (c) TheBeardedBear and the urssaf-dpae contributors
+#
+# SPDX-License-Identifier: MIT
+
 includes:
     - vendor/phpstan/phpstan/conf/bleedingEdge.neon
+    - phpstan-constants.php
     # phpstan-strict-rules, -deprecation-rules, -phpunit, -symfony, -doctrine,
     # shipmonk/phpstan-rules, ergebnis/phpstan-rules and tomasvotruba/type-coverage
     # are registered automatically by phpstan/extension-installer.
@@ -23,7 +30,6 @@ parameters:
         return: 100
         param: 100
         property: 100
-        constant: 100
 
     ergebnis:
         # AbstractBundle::loadExtension/prependExtension and CompilerPassInterface::process impose ContainerBuilder parameters.
@@ -34,11 +40,24 @@ parameters:
                 - DomainException
                 - LogicException
                 - RuntimeException
+                - TheBeardedBear\UrssafDpae\Domain\Exception\DomainException
+                # Common properties of the public integration events (scalar, readonly): ADR 0000 section 7, as in the reference.
+                - TheBeardedBear\UrssafDpae\Contract\Event\IntegrationEvent
                 # Framework extension points without an interface alternative (bridges only).
                 - Doctrine\DBAL\Types\Type
                 - Symfony\Component\HttpKernel\Bundle\AbstractBundle
                 - Symfony\Component\Console\Command\Command
                 - Symfony\Component\HttpKernel\Kernel
+        # Doctrine generates lazy-loading proxies by extending the mapped entities (and pre-generates them at cache warm-up),
+        # so the row entities of the Doctrine bridge cannot be final nor readonly; they are final by convention (@final).
+        final:
+            classesNotRequiredToBeAbstractOrFinal:
+                - TheBeardedBear\UrssafDpae\Bridge\Doctrine\Entity\DepositFlowRecord
+                - TheBeardedBear\UrssafDpae\Bridge\Doctrine\Entity\DepositRecord
+                - TheBeardedBear\UrssafDpae\Bridge\Doctrine\Entity\OutboxMessage
+                - TheBeardedBear\UrssafDpae\Bridge\Doctrine\Entity\ReturnContentRecord
+                - TheBeardedBear\UrssafDpae\Bridge\Doctrine\Entity\ReturnRecord
+                - TheBeardedBear\UrssafDpae\Bridge\Doctrine\Entity\SyncCursorRecord
         # Disabled rules (DDD value objects / domain model), each one justified:
         # Optional value-object arguments and "withX" factories legitimately default (e.g. currency, locale).
         noConstructorParameterWithDefaultValue:

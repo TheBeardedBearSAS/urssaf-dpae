@@ -1,3 +1,9 @@
+# This file is part of thebeardedbear/urssaf-dpae.
+#
+# Copyright (c) TheBeardedBear and the urssaf-dpae contributors
+#
+# SPDX-License-Identifier: MIT
+
 name: Setup PHP and dependencies
 description: Installs PHP with the extensions of docker/php/Dockerfile and the Composer dependencies.
 
@@ -6,7 +12,7 @@ inputs:
     description: PHP version
     required: true
   dependencies:
-    description: locked (composer install), lowest or highest (composer update)
+    description: locked (composer install), lowest, highest or symfony8 (composer update; symfony8 resolves Symfony 8, see bin/require-symfony8)
     required: false
     default: locked
   coverage:
@@ -44,5 +50,6 @@ runs:
           locked)  composer install --no-progress ;;
           lowest)  composer update --prefer-lowest --prefer-stable --no-progress ;;
           highest) composer update --no-progress ;;
+          symfony8) php bin/require-symfony8 && composer update --with-all-dependencies --no-progress ;;
           *) echo "Unknown dependencies mode: ${{ inputs.dependencies }}"; exit 1 ;;
         esac
