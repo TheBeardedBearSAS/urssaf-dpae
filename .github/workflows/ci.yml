@@ -146,7 +146,10 @@ jobs:
         with:
           php-version: '8.4'
           dependencies: symfony8
-      - run: composer show symfony/framework-bundle doctrine/doctrine-bundle | grep -E '^(name|versions)'
+      - run: |
+          for package in symfony/framework-bundle doctrine/doctrine-bundle; do
+            composer show "$package" | grep -E '^(name|versions)'
+          done
       - run: vendor/bin/phpunit --testsuite=unit,functional
 
   # 100 % lines / methods / classes over the whole of src (unit + functional suites).
