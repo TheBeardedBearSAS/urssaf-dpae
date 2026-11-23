@@ -12,7 +12,6 @@ declare(strict_types=1);
 
 namespace TheBeardedBear\UrssafDpae\Tests\Unit\Infrastructure\Urssaf\Wire;
 
-use ArrayObject;
 use PHPUnit\Framework\TestCase;
 use TheBeardedBear\UrssafDpae\Domain\Declarant\DeclarantCredentials;
 use TheBeardedBear\UrssafDpae\Domain\Declarant\ServiceCode;
@@ -60,27 +59,13 @@ final class IdentifiantsXmlWriterEncodingTest extends TestCase
         }
     }
 
-    public function testProbingTheEncodingLeavesTheErrorHandlerAlone(): void
+    public function testEverySupportedEncodingIsAcceptedWhateverItsCase(): void
     {
-        error_clear_last();
-        $received = new ArrayObject();
-        set_error_handler(static function (int $level, string $message) use ($received): bool {
-            $received->append($message);
-
-            return true;
-        });
-        try {
-            try {
-                IdentifiantsXmlWriter::withEncoding('NOT-AN-ENCODING');
-            } catch (InvalidValue $exception) {
-                static::assertSame('authentication_encoding.invalid_format', $exception->violationCode());
-            }
-            static::assertSame([], $received->getArrayCopy());
-            static::assertNull(error_get_last());
-            trigger_error('after', \E_USER_WARNING);
-            static::assertSame(['after'], $received->getArrayCopy());
-        } finally {
-            restore_error_handler();
+        foreach (['utf-8' => 'UTF-8', ' iso-8859-1 ' => 'ISO-8859-1', 'ISO-8859-15' => 'ISO-8859-15', 'Windows-1252' => 'windows-1252', 'us-ascii' => 'US-ASCII'] as $given => $written) {
+            static::assertStringStartsWith(
+                \sprintf("<?xml version=\"1.0\" encoding=\"%s\"?>\n", $written),
+                IdentifiantsXmlWriter::withEncoding($given)->write(self::credentials('Dupond', 'Alain', 'motdepasse1', ServiceCode::direct())),
+            );
         }
     }
 }

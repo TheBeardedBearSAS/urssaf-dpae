@@ -33,6 +33,15 @@ final readonly class IdentifiantsXmlWriter implements CredentialsXmlWriter
     public const ROOT_ELEMENT = 'identifiants';
     public const DEFAULT_ENCODING = 'UTF-8';
 
+    /** Supported declared encodings (upper-case key => name written in the declaration), same list as SafeXmlReader. */
+    private const ENCODINGS = [
+        'UTF-8' => 'UTF-8',
+        'ISO-8859-1' => 'ISO-8859-1',
+        'ISO-8859-15' => 'ISO-8859-15',
+        'WINDOWS-1252' => 'windows-1252',
+        'US-ASCII' => 'US-ASCII',
+    ];
+
     private const SUBJECT = 'authentication_encoding';
     private const NOT_XML_CHARACTER = '/[^\x{9}\x{A}\x{D}\x{20}-\x{D7FF}\x{E000}-\x{FFFD}\x{10000}-\x{10FFFF}]/u';
 
@@ -46,8 +55,8 @@ final readonly class IdentifiantsXmlWriter implements CredentialsXmlWriter
     }
 
     /**
-     * @throws InvalidValue `authentication_encoding.empty` or `authentication_encoding.invalid_format` when ext-dom
-     *                      does not know the encoding
+     * @throws InvalidValue `authentication_encoding.empty` or `authentication_encoding.invalid_format` when the encoding
+     *                      is not one of the supported ones
      */
     public static function withEncoding(string $encoding): self
     {
@@ -55,16 +64,13 @@ final readonly class IdentifiantsXmlWriter implements CredentialsXmlWriter
             throw InvalidValue::empty(self::SUBJECT);
         }
 
-        $probe = new DOMDocument('1.0', $encoding);
-        // An unknown encoding makes saveXML() return false after raising a warning; the handler only swallows it.
-        set_error_handler(static fn(): bool => true);
-        $known = $probe->saveXML() !== false;
-        restore_error_handler();
-        if (!$known) {
-            throw InvalidValue::invalidFormat(self::SUBJECT, 'an encoding known to ext-dom');
+        // A fixed list, not a probe of ext-dom: whether libxml warns about an unknown encoding depends on its version.
+        $canonical = self::ENCODINGS[strtoupper(trim($encoding))] ?? null;
+        if ($canonical === null) {
+            throw InvalidValue::invalidFormat(self::SUBJECT, 'UTF-8, ISO-8859-1, ISO-8859-15, windows-1252 or US-ASCII');
         }
 
-        return new self($encoding);
+        return new self($canonical);
     }
 
     public function write(
