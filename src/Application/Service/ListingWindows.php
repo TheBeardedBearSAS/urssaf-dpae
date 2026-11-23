@@ -33,13 +33,15 @@ final class ListingWindows
             return [[$from, $until]];
         }
 
+        // `$maxRange` is strictly positive (WorkflowPolicy), so every pass moves `$from` forward. The loop flag comes from the window reaching
+        // `$until`, never from `$from`, and there is no break or return to drop: a wrong comparison (e.g. an Infection mutant) yields wrong
+        // windows, caught by the tests, never an endless loop.
         $windows = [];
-        while ($from->isBefore($until)) {
+        $last = false;
+        while (!$last) {
             $to = Instants::plus($from, $maxRange);
-            if ($to->isAfter($until)) {
-                $to = $until;
-            }
-            $windows[] = [$from, $to];
+            $last = !$to->isBefore($until);
+            $windows[] = [$from, $last ? $until : $to];
             $from = $to;
         }
 
